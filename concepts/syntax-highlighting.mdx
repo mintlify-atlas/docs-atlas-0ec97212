@@ -1,0 +1,545 @@
+---
+title: Syntax Highlighting
+description: Understanding ZepSyntax, pluggable highlighters, and adding language support
+---
+
+Zep's syntax highlighting system is designed to be extensible, supporting multiple languages through a pluggable architecture. Syntax highlighting runs asynchronously to avoid blocking the editor during updates.
+
+## ZepSyntax Base Class
+
+From `include/zep/syntax.h:51-77`:
+
+```cpp
+class ZepSyntax : public ZepComponent
+{
+public:
+    ZepSyntax(ZepBuffer& buffer,
+        const std::unordered_set<std::string>& keywords = {},
+        const std::unordered_set<std::string>& identifiers = {},
+        uint32_t flags = 0);
+    virtual ~ZepSyntax();
+    
+    virtual SyntaxResult GetSyntaxAt(const GlyphIterator& index) const;
+    virtual void UpdateSyntax();
+    virtual void Interrupt();
+    virtual void Wait() const;
+    
+    virtual long GetProcessedChar() const
+    {
+        return m_processedChar;
+    }
+    virtual void Notify(std::shared_ptr<ZepMessage> payload) override;
+    
+    const NVec4f& ToBackgroundColor(const SyntaxResult& res) const;
+    const NVec4f& ToForegroundColor(const SyntaxResult& res) const;
+```
+
+<Note>
+Syntax highlighting operates on the buffer asynchronously. The `m_processedChar` atomic tracks how much of the buffer has been analyzed.
+</Note>
+
+## Syntax Result
+
+Syntax information is returned as a `SyntaxResult`:
+
+From `include/zep/syntax.h:37-48`:
+
+```cpp
+struct SyntaxData
+{
+    ThemeColor foreground = ThemeColor::Normal;
+    ThemeColor background = ThemeColor::None;
+    bool underline = false;
+};
+
+struct SyntaxResult : SyntaxData
+{
+    NVec4f customBackgroundColor;
+    NVec4f customForegroundColor;
+};
+```
+
+### Theme Colors
+
+Syntax uses theme colors that adapt to the active theme:
+
+```cpp
+enum class ThemeColor
+{
+    Normal,          // Default text
+    Keyword,         // Language keywords (if, while, class)
+    Identifier,      // Known identifiers
+    Number,          // Numeric literals
+    String,          // String literals
+    Comment,         // Comments
+    Whitespace,      // Spaces and tabs
+    Parenthesis,     // Brackets and braces
+    Background,      // Editor background
+    // ... many more
+};
+```
+
+<Info>
+Using theme colors instead of hardcoded RGB values ensures your syntax highlighting adapts when users switch between light and dark themes.
+</Info>
+
+## How Syntax Highlighting Works
+
+### Initialization
+
+From `src/syntax.cpp:15-29`:
+
+```cpp
+ZepSyntax::ZepSyntax(
+    ZepBuffer& buffer,
+    const std::unordered_set<std::string>& keywords,
+    const std::unordered_set<std::string>& identifiers,
+    uint32_t flags)
+    : ZepComponent(buffer.GetEditor())
+    , m_buffer(buffer)
+    , m_keywords(keywords)
+    , m_identifiers(identifiers)
+    , m_stop(false)
+    , m_flags(flags)
+{
+    m_syntax.resize(m_buffer.GetWorkingBuffer().size());
+    m_adornments.push_back(std::make_shared<ZepSyntaxAdorn_RainbowBrackets>(*this, m_buffer));
+}
+```
+
+Each character in the buffer has a corresponding `SyntaxData` entry.
+
+### Update Process
+
+From `src/syntax.cpp:145-333`:
+
+```cpp
+void ZepSyntax::UpdateSyntax()
+{
+    auto& buffer = m_buffer.GetWorkingBuffer();
+    auto itrCurrent = buffer.begin() + m_processedChar;
+    auto itrEnd = buffer.begin() + m_targetChar;
+    
+    // Walk backwards to previous delimiter
+    while (itrCurrent > buffer.begin())
+    {
+        if (std::find(delim.begin(), delim.end(), *itrCurrent) == delim.end())
+        {
+            itrCurrent--;
+        }
+        else
+        {
+            break;
+        }
+    }
+    
+    // Parse tokens and apply colors
+    while (itrCurrent != itrEnd)
+    {
+        if (m_stop == true)
+            return;
+            
+        // Find next token
+        auto itrFirst = buffer.find_first_not_of(itrCurrent, buffer.end(), 
+                                                 delim.begin(), delim.end());
+        auto itrLast = buffer.find_first_of(itrFirst, buffer.end(), 
+                                           delim.begin(), delim.end());
+        
+        auto token = std::string(itrFirst, itrLast);
+        
+        // Check against keyword/identifier sets
+        if (m_keywords.find(token) != m_keywords.end())
+        {
+            mark(itrFirst, itrLast, ThemeColor::Keyword, ThemeColor::None);
+        }
+        else if (m_identifiers.find(token) != m_identifiers.end())
+        {
+            mark(itrFirst, itrLast, ThemeColor::Identifier, ThemeColor::None);
+        }
+        // ... more token classification
+    }
+}
+```
+
+<Accordion title="Token Classification Logic">
+The base syntax highlighter classifies tokens:
+
+1. **Keywords** - Matches against the keyword set
+2. **Identifiers** - Matches against the identifier set  
+3. **Numbers** - Only contains digits 0-9
+4. **Strings** - Enclosed in quotes with escape handling
+5. **Comments** - Starts with `//` or `;` (for Lisp)
+6. **Parentheses** - Brackets and braces
+7. **Whitespace** - Spaces and tabs
+8. **Normal** - Everything else
+</Accordion>
+
+## Registering Syntax Providers
+
+Syntax providers are registered by file extension:
+
+From `include/zep/editor.h:210-216`:
+
+```cpp
+using tSyntaxFactory = std::function<std::shared_ptr<ZepSyntax>(ZepBuffer*)>;
+
+struct SyntaxProvider
+{
+    std::string syntaxID;
+    tSyntaxFactory factory = nullptr;
+};
+```
+
+From `include/zep/editor.h:321`:
+
+```cpp
+void RegisterSyntaxFactory(const std::vector<std::string>& mappings, 
+                          SyntaxProvider factory);
+```
+
+### Example Registration
+
+```cpp
+// Register C++ syntax
+editor.RegisterSyntaxFactory(
+    {".cpp", ".h", ".hpp", ".cc", ".cxx"},
+    SyntaxProvider{
+        "cpp",
+        [](ZepBuffer* buffer) {
+            return std::make_shared<ZepSyntax_CPP>(*buffer);
+        }
+    }
+);
+
+// Register Python syntax
+editor.RegisterSyntaxFactory(
+    {".py"},
+    SyntaxProvider{
+        "python",
+        [](ZepBuffer* buffer) {
+            return std::make_shared<ZepSyntax_Python>(*buffer);
+        }
+    }
+);
+```
+
+<Info>
+When a buffer is loaded, Zep checks the file extension and creates the appropriate syntax highlighter automatically.
+</Info>
+
+## Syntax Flags
+
+From `include/zep/syntax.h:27-35`:
+
+```cpp
+namespace ZepSyntaxFlags
+{
+enum
+{
+    CaseInsensitive = (1 << 0),      // Keywords are case-insensitive
+    IgnoreLineHighlight = (1 << 1),  // Don't highlight current line
+    LispLike = (1 << 2)              // Use Lisp-style syntax rules
+};
+};
+```
+
+Flags affect parsing behavior:
+
+```cpp
+// For a case-insensitive language like SQL
+auto syntax = std::make_shared<ZepSyntax>(
+    buffer,
+    keywords,
+    identifiers,
+    ZepSyntaxFlags::CaseInsensitive
+);
+
+// For Lisp-family languages
+auto syntax = std::make_shared<ZepSyntax>(
+    buffer,
+    keywords,
+    identifiers,
+    ZepSyntaxFlags::LispLike
+);
+```
+
+## Asynchronous Updates
+
+### Buffer Change Notifications
+
+From `src/syntax.cpp:110-142`:
+
+```cpp
+void ZepSyntax::Notify(std::shared_ptr<ZepMessage> spMsg)
+{
+    if (spMsg->messageId == Msg::Buffer)
+    {
+        auto spBufferMsg = std::static_pointer_cast<BufferMessage>(spMsg);
+        if (spBufferMsg->pBuffer != &m_buffer)
+            return;
+            
+        if (spBufferMsg->type == BufferMessageType::PreBufferChange)
+        {
+            Interrupt();  // Stop current highlighting
+        }
+        else if (spBufferMsg->type == BufferMessageType::TextDeleted)
+        {
+            Interrupt();
+            m_syntax.erase(m_syntax.begin() + spBufferMsg->startLocation.Index(),
+                          m_syntax.begin() + spBufferMsg->endLocation.Index());
+            QueueUpdateSyntax(spBufferMsg->startLocation, spBufferMsg->endLocation);
+        }
+        else if (spBufferMsg->type == BufferMessageType::TextAdded)
+        {
+            Interrupt();
+            m_syntax.insert(m_syntax.begin() + spBufferMsg->startLocation.Index(),
+                          ByteDistance(spBufferMsg->startLocation, 
+                                      spBufferMsg->endLocation),
+                          SyntaxData{});
+            QueueUpdateSyntax(spBufferMsg->startLocation, spBufferMsg->endLocation);
+        }
+    }
+}
+```
+
+### Thread Safety
+
+From `src/syntax.cpp:73-82`:
+
+```cpp
+void ZepSyntax::Interrupt()
+{
+    // Stop the thread, wait for it
+    m_stop = true;
+    if (m_syntaxResult.valid())
+    {
+        m_syntaxResult.get();
+    }
+    m_stop = false;
+}
+```
+
+<Note>
+Syntax updates can be interrupted if the buffer changes. The atomic `m_stop` flag allows clean cancellation of in-progress highlighting.
+</Note>
+
+## Secondary Syntax (Adornments)
+
+Zep supports "adornments" - secondary syntax highlighters that overlay the primary:
+
+From `include/zep/syntax.h:100-115`:
+
+```cpp
+class ZepSyntaxAdorn : public ZepComponent
+{
+public:
+    ZepSyntaxAdorn(ZepSyntax& syntax, ZepBuffer& buffer)
+        : ZepComponent(syntax.GetEditor())
+        , m_buffer(buffer)
+        , m_syntax(syntax)
+    {
+    }
+    
+    virtual SyntaxResult GetSyntaxAt(const GlyphIterator& offset, 
+                                    bool& found) const = 0;
+    
+protected:
+    ZepBuffer& m_buffer;
+    ZepSyntax& m_syntax;
+};
+```
+
+### Rainbow Brackets
+
+Zep includes a rainbow bracket adornment:
+
+From `src/syntax.cpp:28`:
+
+```cpp
+m_adornments.push_back(
+    std::make_shared<ZepSyntaxAdorn_RainbowBrackets>(*this, m_buffer)
+);
+```
+
+Rainbow brackets color matching pairs of brackets differently to aid readability.
+
+## Creating a Custom Syntax Highlighter
+
+### Step 1: Define Keywords
+
+```cpp
+class ZepSyntax_MyLanguage : public ZepSyntax
+{
+public:
+    ZepSyntax_MyLanguage(ZepBuffer& buffer)
+        : ZepSyntax(buffer,
+            GetKeywords(),
+            GetIdentifiers(),
+            0)  // flags
+    {
+    }
+    
+    static std::unordered_set<std::string> GetKeywords()
+    {
+        return {
+            "function", "if", "else", "while", "for",
+            "return", "var", "const", "let",
+            "class", "new", "this", "super"
+        };
+    }
+    
+    static std::unordered_set<std::string> GetIdentifiers()
+    {
+        return {
+            "console", "window", "document",
+            "Array", "Object", "String", "Number"
+        };
+    }
+};
+```
+
+### Step 2: Override UpdateSyntax (Optional)
+
+For more complex syntax (like multi-line comments), override `UpdateSyntax()`:
+
+```cpp
+void ZepSyntax_MyLanguage::UpdateSyntax() override
+{
+    // Call base implementation first
+    ZepSyntax::UpdateSyntax();
+    
+    // Add custom syntax rules
+    auto& buffer = m_buffer.GetWorkingBuffer();
+    
+    // Find multi-line comments /* */
+    auto itr = buffer.begin();
+    while (itr != buffer.end())
+    {
+        if (*itr == '/' && (itr + 1) != buffer.end() && *(itr + 1) == '*')
+        {
+            auto start = itr;
+            itr += 2;
+            
+            // Find closing */
+            while (itr != buffer.end())
+            {
+                if (*itr == '*' && (itr + 1) != buffer.end() && *(itr + 1) == '/')
+                {
+                    itr += 2;
+                    mark(start, itr, ThemeColor::Comment, ThemeColor::None);
+                    break;
+                }
+                itr++;
+            }
+        }
+        else
+        {
+            itr++;
+        }
+    }
+}
+```
+
+### Step 3: Register with Editor
+
+```cpp
+editor.RegisterSyntaxFactory(
+    {".mylang", ".ml"},
+    SyntaxProvider{
+        "mylanguage",
+        [](ZepBuffer* buffer) {
+            return std::make_shared<ZepSyntax_MyLanguage>(*buffer);
+        }
+    }
+);
+```
+
+## Getting Syntax at Cursor
+
+To get syntax information for a specific location:
+
+From `src/syntax.cpp:36-63`:
+
+```cpp
+SyntaxResult ZepSyntax::GetSyntaxAt(const GlyphIterator& offset) const
+{
+    SyntaxResult result;
+    
+    Wait();  // Wait for syntax update to complete
+    
+    if (m_processedChar < offset.Index() || 
+        (long)m_syntax.size() <= offset.Index())
+    {
+        return result;  // Not processed yet
+    }
+    
+    result.background = m_syntax[offset.Index()].background;
+    result.foreground = m_syntax[offset.Index()].foreground;
+    result.underline = m_syntax[offset.Index()].underline;
+    
+    // Check adornments (like rainbow brackets)
+    bool found = false;
+    for (auto& adorn : m_adornments)
+    {
+        auto adornResult = adorn->GetSyntaxAt(offset, found);
+        if (found)
+        {
+            result = adornResult;
+            break;
+        }
+    }
+    
+    return result;
+}
+```
+
+<Info>
+Adornments take priority over base syntax, allowing features like rainbow brackets to override default bracket colors.
+</Info>
+
+## Performance Considerations
+
+<CardGroup cols={2}>
+  <Card title="Incremental Updates" icon="rotate">
+    Only re-highlight changed regions, not the entire file
+  </Card>
+  <Card title="Asynchronous" icon="spinner">
+    Highlighting runs in background without blocking input
+  </Card>
+  <Card title="Interruptible" icon="stop">
+    In-progress highlighting stops when buffer changes
+  </Card>
+  <Card title="Per-Character Cache" icon="database">
+    Each character's syntax is cached for fast lookups
+  </Card>
+</CardGroup>
+
+### Best Practices
+
+1. **Keep keyword sets small** - Large sets slow down token matching
+2. **Use keyword sets** - Don't implement custom string matching for common keywords
+3. **Minimize regex** - String operations are faster than regex for simple patterns
+4. **Test large files** - Ensure highlighting performs well on 10,000+ line files
+
+## Built-in Syntax Highlighters
+
+Zep includes syntax highlighters for several languages:
+
+- **C/C++** - Full C++ syntax with preprocessor support
+- **CMake** - CMake language support
+- **Markdown** - CommonMark support with heading styles
+- **GLSL** - OpenGL Shading Language
+- **Lisp/Scheme** - S-expression aware highlighting
+
+Check the `src/syntax_*.cpp` files for implementation examples.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Buffers" href="/concepts/buffers">
+    Understand how syntax data is stored
+  </Card>
+  <Card title="Display Layer" href="/concepts/display-layer">
+    Learn how syntax colors are rendered
+  </Card>
+</CardGroup>

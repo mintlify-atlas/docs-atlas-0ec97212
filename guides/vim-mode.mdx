@@ -1,0 +1,291 @@
+---
+title: Vim Mode
+description: Comprehensive Vim emulation mode in Zep with support for motions, operators, and visual mode
+---
+
+Zep includes a Vim mode (`ZepMode_Vim`) that implements a subset of Vim's commands and keybindings. This is designed to provide a comfortable editing experience for Vim users without attempting to fully replicate all of Vim's features.
+
+<Note>
+  This is a practical implementation focused on commonly-used Vim commands. The goal is to make editing comfortable, not to perfectly emulate Vim's behavior.
+</Note>
+
+## Overview
+
+Vim mode in Zep supports:
+- Normal, Insert, and Visual modes
+- Command counts and registers
+- The dot (`.`) command for repeating actions
+- Word and WORD motions
+- Text objects for efficient editing
+- Ex commands (`:`, `/`, `?`)
+- Undo/redo with proper command grouping
+
+## Navigation Commands
+
+<Accordion title="Basic Motions">
+
+### Character Movement
+- `h`, `<Left>` - Move left
+- `j`, `<Down>` - Move down  
+- `k`, `<Up>` - Move up
+- `l`, `<Right>` - Move right
+
+### Line Movement
+- `0`, `<Home>` - Move to start of line
+- `^` - Move to first non-whitespace character
+- `$`, `<End>` - Move to end of line
+- `<Return>` - Move to first character of next line
+
+</Accordion>
+
+<Accordion title="Word Motions">
+
+### word motions (lowercase)
+- `w` - Move forward to start of next word
+- `b` - Move backward to start of previous word  
+- `e` - Move to end of current/next word
+- `ge` - Move backward to end of previous word
+
+### WORD motions (uppercase)
+- `W` - Move forward to start of next WORD (whitespace-delimited)
+- `B` - Move backward to start of previous WORD
+- `E` - Move to end of current/next WORD
+- `gE` - Move backward to end of previous WORD
+
+<Tip>
+  WORDs are whitespace-separated tokens, while words break on punctuation. Use uppercase for faster navigation across code.
+</Tip>
+
+</Accordion>
+
+<Accordion title="Page and File Motions">
+
+### Page Navigation
+- `<C-f>`, `<PageDown>` - Page forward
+- `<C-b>`, `<PageUp>` - Page backward  
+- `<C-d>` - Half page forward
+- `<C-u>` - Half page backward
+
+### File Navigation  
+- `gg` - Jump to beginning of file
+- `G` - Jump to end of file (or line number with count: `42G`)
+
+</Accordion>
+
+<Accordion title="Split Navigation">
+
+### Moving Between Splits
+- `<C-h>` - Move to left split
+- `<C-j>` - Move to split below
+- `<C-k>` - Move to split above  
+- `<C-l>` - Move to right split
+
+</Accordion>
+
+## Search and Find
+
+<Accordion title="Search Commands">
+
+### Line Search
+- `f<char>` - Find character forward on current line
+- `F<char>` - Find character backward on current line
+- `;` - Repeat last find
+- `%` - Jump to matching delimiter (parentheses, brackets, braces)
+
+### File Search  
+- `/[pattern]` - Search forward in file
+- `?[pattern]` - Search backward in file
+- `n` - Next search result
+- `N` - Previous search result
+
+### Markers
+- `<F8>` - Jump to next marker
+- `<S-F8>` - Jump to previous marker
+
+</Accordion>
+
+## Editing Commands
+
+<Accordion title="Insert Mode">
+
+### Entering Insert Mode
+- `i` - Insert before cursor
+- `I` - Insert at first non-whitespace character of line
+- `a` - Append after cursor
+- `A` - Append at end of line
+- `o` - Open new line below
+- `O` - Open new line above
+
+### Exiting Insert Mode  
+- `<Escape>` - Return to normal mode
+- `jk` - Quick escape sequence (type `j` then `k` quickly)
+
+<Tip>
+  The `jk` escape sequence provides a faster way to exit insert mode without reaching for the Escape key.
+</Tip>
+
+</Accordion>
+
+<Accordion title="Delete Commands">
+
+### Basic Deletion
+- `x`, `<Del>` - Delete character under cursor
+- `dd` - Delete entire line
+- `D`, `d$` - Delete to end of line
+
+### Word Deletion
+- `dw` - Delete word
+- `dW` - Delete WORD
+- `diw` - Delete inner word (word under cursor)
+- `diW` - Delete inner WORD  
+- `daw` - Delete a word (including surrounding whitespace)
+- `daW` - Delete a WORD (including surrounding whitespace)
+
+### Advanced Deletion
+- `dt<char>` - Delete to (but not including) character
+- `di<delimiter>` - Delete inside delimiters: `di(`, `di{`, `di[`, `di"`, `di'`
+
+</Accordion>
+
+<Accordion title="Change Commands">
+
+Change commands delete text and enter insert mode.
+
+### Basic Change
+- `cc` - Change entire line
+- `C`, `c$` - Change to end of line  
+- `s` - Substitute character
+- `S` - Substitute line
+
+### Word Change
+- `cw` - Change word
+- `cW` - Change WORD
+- `ciw` - Change inner word
+- `ciW` - Change inner WORD
+- `caw` - Change a word (with whitespace)  
+- `caW` - Change a WORD (with whitespace)
+
+### Advanced Change
+- `ct<char>` - Change to character
+- `ci<delimiter>` - Change inside delimiters: `ci(`, `ci{`, `ci[`, `ci"`, `ci'`
+
+</Accordion>
+
+<Accordion title="Copy and Paste">
+
+### Yanking (Copying)
+- `yy` - Yank (copy) entire line
+- `Y` - Yank line (linewise)
+- `y` (in visual mode) - Yank selected text
+
+### Pasting
+- `p` - Paste after cursor/line
+- `P` - Paste before cursor/line
+
+### Registers
+Zep supports registers `a-z`, `A-Z`, `0-9`, `_`, and `"` (default register).
+
+- `"<register>y` - Yank to specific register
+- `"<register>p` - Paste from specific register
+
+Example: `"ayy` yanks current line to register `a`, `"ap` pastes it.
+
+</Accordion>
+
+## Visual Mode
+
+<Accordion title="Visual Selection">
+
+### Entering Visual Mode
+- `v` - Character-wise visual mode
+- `V` - Line-wise visual mode
+
+### Visual Mode Operations
+- `d` - Delete selection
+- `c` - Change selection (delete and enter insert mode)
+- `s` - Substitute selection  
+- `y` - Yank (copy) selection
+- `x` - Delete selection
+- `C` - Change to end of lines in selection
+
+### Visual Mode Text Objects  
+- `aw` - Select a word
+- `aW` - Select a WORD
+- `iw` - Select inner word
+- `iW` - Select inner WORD
+
+</Accordion>
+
+## Advanced Features
+
+<Accordion title="Command Counts">
+
+Most commands accept a count prefix:
+- `3j` - Move down 3 lines
+- `5w` - Move forward 5 words  
+- `2dd` - Delete 2 lines
+- `4x` - Delete 4 characters
+
+</Accordion>
+
+<Accordion title="Dot Command">
+
+The `.` command repeats the last change operation:
+
+```vim
+dd.  # Delete line, then delete another line
+c2w # Change 2 words, then press . to change 2 more words elsewhere
+```
+
+</Accordion>
+
+<Accordion title="Other Commands">
+
+### Miscellaneous
+- `J` - Join current line with next line
+- `r<char>` - Replace character under cursor
+- `u`, `<C-z>` - Undo
+- `<C-r>` - Redo
+
+### Tab and Window Management  
+- `H` - Previous tab window
+- `L` - Next tab window
+- `<C-i><C-o>` - Switch to alternate file
+
+### Font Size
+- `+`, `<C-=>` - Increase font size
+- `-`, `<C-->` - Decrease font size
+
+</Accordion>
+
+## Ex Commands
+
+<Accordion title="Command Line Mode">
+
+Enter ex command mode with:
+- `:` - Ex command
+- `/` - Forward search  
+- `?` - Backward search
+
+### Quick Search
+- `<C-p>`, `<C-,>` - Quick search (fuzzy file finder)
+
+</Accordion>
+
+## Implementation Notes
+
+<Note>
+  Zep's Vim mode is implemented in `src/mode_vim.cpp:14-65` with a focus on the most commonly used commands. The implementation uses a keymap tree structure for efficient command parsing and supports command composition with counts, registers, and motions.
+</Note>
+
+The mode uses relative line numbers (when enabled) and provides proper undo/redo grouping for complex commands.
+
+## Related
+
+<Card title="Standard Mode" icon="keyboard" href="/guides/standard-mode">
+  Learn about the alternative standard editing mode
+</Card>
+
+<Card title="Keymapping" icon="code" href="/guides/keymapping">  
+  Customize and extend Vim mode keybindings
+</Card>

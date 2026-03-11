@@ -1,0 +1,272 @@
+---
+title: "Custom Modes"
+description: "Learn how to create custom editor modes in Zep by inheriting from ZepMode"
+---
+
+## Overview
+
+Zep supports custom editor modes that define how the editor responds to keyboard input and user interactions. A mode controls the editing behavior, key mappings, and visual feedback for the editor.
+
+## Creating a Custom Mode
+
+To create a custom mode, inherit from the `ZepMode` base class and implement the required virtual methods.
+
+### Basic Structure
+
+```cpp
+#include "zep/mode.h"
+
+namespace Zep
+{
+
+class ZepMode_Custom : public ZepMode
+{
+public:
+    ZepMode_Custom(ZepEditor& editor);
+    virtual ~ZepMode_Custom();
+
+    virtual void Init() override;
+    virtual void Begin(ZepWindow* pWindow) override;
+    virtual const char* Name() const override { return "Custom"; }
+    virtual EditorMode DefaultMode() const override;
+};
+
+} // namespace Zep
+```
+
+<Note>
+The `Name()` method returns the identifier for your mode, and `DefaultMode()` specifies the initial editing mode (Normal, Insert, Visual, or Ex).
+</Note>
+
+## Essential Virtual Methods
+
+<Steps>
+
+### Initialize the Mode
+
+Implement `Init()` to set up key mappings and mode flags:
+
+```cpp
+void ZepMode_Custom::Init()
+{
+    // Set cursor type for visual mode
+    m_visualCursorType = CursorType::Insert;
+
+    // Configure mode behavior flags
+    m_modeFlags |= ModeFlags::InsertModeGroupUndo | ModeFlags::StayInInsertMode;
+
+    // Initialize registers
+    for (int i = 0; i <= 9; i++)
+    {
+        GetEditor().SetRegister('0' + (const char)i, "");
+    }
+    GetEditor().SetRegister('"', "");
+}
+```
+
+### Set Up Key Mappings
+
+Add keyboard mappings using the `keymap_add` function:
+
+```cpp
+void ZepMode_Custom::Init()
+{
+    // Map backspace in insert mode
+    keymap_add({ &m_insertMap }, { "<Backspace>" }, id_Backspace);
+    
+    // Map Ctrl+Z for undo
+    keymap_add({ &m_insertMap, &m_visualMap }, { "<C-z>" }, id_Undo);
+    
+    // Map arrow keys
+    keymap_add({ &m_insertMap }, { "<Left>" }, id_MotionStandardLeft);
+    keymap_add({ &m_insertMap }, { "<Right>" }, id_MotionStandardRight);
+    keymap_add({ &m_insertMap }, { "<Up>" }, id_MotionStandardUp);
+    keymap_add({ &m_insertMap }, { "<Down>" }, id_MotionStandardDown);
+}
+```
+
+### Begin Mode Execution
+
+Implement `Begin()` to activate the mode:
+
+```cpp
+void ZepMode_Custom::Begin(ZepWindow* pWindow)
+{
+    ZepMode::Begin(pWindow);
+    
+    // Switch to the default editing mode
+    SwitchMode(EditorMode::Insert);
+}
+```
+
+</Steps>
+
+## Key Mapping Reference
+
+### Modifier Keys
+
+| Modifier | Notation | Example |
+|----------|----------|----------|
+| Control  | `<C->`   | `<C-z>` |
+| Shift    | `<S->`   | `<S-Left>` |
+| Alt      | `<A->`   | `<A-f>` |
+| Combined | Multiple | `<C-S-z>` |
+
+### Special Keys
+
+```cpp
+"<Return>"      // Enter key
+"<Backspace>"   // Backspace
+"<Tab>"         // Tab
+"<Del>"         // Delete
+"<Escape>"      // Escape
+"<Left>"        // Left arrow
+"<Right>"       // Right arrow
+"<Up>"          // Up arrow
+"<Down>"        // Down arrow
+"<Home>"        // Home
+"<End>"         // End
+"<PageDown>"    // Page Down
+"<PageUp>"      // Page Up
+"<F1>" to "<F12>" // Function keys
+```
+
+## Advanced Features
+
+### Handle Custom Input
+
+Override `AddKeyPress()` to process raw keyboard input:
+
+```cpp
+void ZepMode_Custom::AddKeyPress(uint32_t key, uint32_t modifierKeys)
+{
+    // Custom key handling logic
+    if (key == 'q' && (modifierKeys & ModifierKey::Ctrl))
+    {
+        // Handle Ctrl+Q
+        return;
+    }
+    
+    // Delegate to base class
+    ZepMode::AddKeyPress(key, modifierKeys);
+}
+```
+
+### Custom Command Handling
+
+Implement `GetCommand()` to handle custom command sequences:
+
+```cpp
+bool ZepMode_Custom::GetCommand(CommandContext& context)
+{
+    // Parse and execute custom commands
+    if (context.fullCommand == "mycommand")
+    {
+        // Execute custom command
+        return true;
+    }
+    
+    return ZepMode::GetCommand(context);
+}
+```
+
+### Modify Window Flags
+
+Override `ModifyWindowFlags()` to customize window appearance:
+
+```cpp
+uint32_t ZepMode_Custom::ModifyWindowFlags(uint32_t windowFlags)
+{
+    // Hide line numbers in this mode
+    windowFlags &= ~WindowFlags::ShowLineNumbers;
+    
+    return windowFlags;
+}
+```
+
+## Mode Flags
+
+<CodeGroup>
+
+```cpp ModeFlags::InsertModeGroupUndo
+// Groups multiple insert operations into a single undo action
+m_modeFlags |= ModeFlags::InsertModeGroupUndo;
+```
+
+```cpp ModeFlags::StayInInsertMode
+// Prevents automatic switching out of insert mode
+m_modeFlags |= ModeFlags::StayInInsertMode;
+```
+
+</CodeGroup>
+
+## Editor Modes
+
+Your custom mode can switch between these editing modes:
+
+- **EditorMode::Normal** - Navigation and command mode (like Vim normal mode)
+- **EditorMode::Insert** - Text insertion mode
+- **EditorMode::Visual** - Visual selection mode
+- **EditorMode::Ex** - Command-line mode
+
+```cpp
+// Switch to insert mode
+SwitchMode(EditorMode::Insert);
+
+// Switch to normal mode
+SwitchMode(EditorMode::Normal);
+```
+
+## Complete Example
+
+Here's a complete custom mode implementation based on the Standard mode:
+
+```cpp
+class ZepMode_Minimal : public ZepMode
+{
+public:
+    ZepMode_Minimal(ZepEditor& editor) : ZepMode(editor) {}
+    
+    virtual void Init() override
+    {
+        // Configure mode for insert-only behavior
+        m_visualCursorType = CursorType::Insert;
+        m_modeFlags |= ModeFlags::InsertModeGroupUndo | ModeFlags::StayInInsertMode;
+        
+        // Basic text editing
+        keymap_add({ &m_insertMap }, { "<Backspace>" }, id_Backspace);
+        keymap_add({ &m_insertMap }, { "<Return>" }, id_InsertCarriageReturn);
+        keymap_add({ &m_insertMap }, { "<Tab>" }, id_InsertTab);
+        keymap_add({ &m_insertMap }, { "<Del>" }, id_Delete);
+        
+        // Navigation
+        keymap_add({ &m_insertMap }, { "<Left>" }, id_MotionStandardLeft);
+        keymap_add({ &m_insertMap }, { "<Right>" }, id_MotionStandardRight);
+        keymap_add({ &m_insertMap }, { "<Up>" }, id_MotionStandardUp);
+        keymap_add({ &m_insertMap }, { "<Down>" }, id_MotionStandardDown);
+        
+        // Undo/Redo
+        keymap_add({ &m_insertMap }, { "<C-z>" }, id_Undo);
+        keymap_add({ &m_insertMap }, { "<C-y>" }, id_Redo);
+    }
+    
+    virtual void Begin(ZepWindow* pWindow) override
+    {
+        ZepMode::Begin(pWindow);
+        SwitchMode(EditorMode::Insert);
+    }
+    
+    virtual const char* Name() const override { return "Minimal"; }
+    virtual EditorMode DefaultMode() const override { return EditorMode::Insert; }
+};
+```
+
+<Warning>
+Be sure to call the base class implementation when overriding `Begin()` to ensure proper initialization.
+</Warning>
+
+## Next Steps
+
+- Learn about [Text Markers](/advanced/text-markers) to add visual annotations
+- Explore [Window Management](/advanced/window-management) for multi-window modes
+- Configure your mode with [Configuration](/advanced/configuration) options

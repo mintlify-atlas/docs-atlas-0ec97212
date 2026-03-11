@@ -1,97 +1,154 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Zep - Embeddable Text Editor"
+description: "A modern, embeddable text editor with optional Vim mode and rendering-agnostic design"
 ---
 
-## Setting up
+<div className="bg-white border-[#e0e0e0] border rounded-lg p-12 shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
+  <div className="text-center mb-8">
+    <h1 className="text-5xl font-bold text-[#1a1a1a] mb-4">
+      Zep Text Editor
+    </h1>
+    <p className="text-xl text-[#1a1a1a] mb-8">
+      An embeddable text editor with optional Vim mode and rendering-agnostic design
+    </p>
+    <div className="flex gap-4 justify-center">
+      <a 
+        href="/quickstart" 
+        className="bg-[#94cb04] text-[#1a1a1a] px-6 py-3 rounded-md font-semibold hover:opacity-90 transition-opacity inline-block"
+      >
+        Get Started
+      </a>
+      <a 
+        href="https://github.com/Rezonality/zep" 
+        className="bg-[#e6e6e6] text-[#1a1a1a] px-6 py-3 rounded-md font-semibold hover:opacity-90 transition-opacity inline-block"
+      >
+        View on GitHub
+      </a>
+    </div>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+## Why Zep?
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+Zep is a simple embeddable editor designed for game engines, development tools, and applications requiring text editing capabilities. Built with a rendering-agnostic architecture, Zep can integrate seamlessly with ImGui, Qt, or custom rendering backends.
 
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Modal Vim Editing" icon="keyboard">
+    Full-featured Vim mode with visual selection, text objects, and common motions
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Rendering Agnostic" icon="paintbrush">
+    Works with ImGui, Qt, or custom rendering backends
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Minimal Dependencies" icon="cube">
+    Core library requires only C++14, no external dependencies
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Gap Buffer" icon="memory">
+    Efficient text storage using gap buffer data structure
   </Card>
-</Columns>
+  <Card title="Syntax Highlighting" icon="code">
+    Pluggable syntax highlighting with built-in language support
+  </Card>
+  <Card title="REPL Integration" icon="terminal">
+    Built-in REPL mode for scripting language integration
+  </Card>
+</CardGroup>
 
-## Create beautiful pages
+## Key Features
 
-Everything you need to create world-class documentation.
+- **Dual Editing Modes**: Choose between modal Vim editing or standard notepad-style editing
+- **Window Management**: Split windows horizontally/vertically with tab support
+- **Fuzzy Search**: Built-in Ctrl+P fuzzy file search
+- **Theme Support**: Multiple color schemes with easy customization
+- **UTF-8 Support**: Full Unicode text editing capabilities
+- **Text Markers**: Highlight errors, warnings, and custom annotations
+- **Easy Integration**: Single-header include or CMake library installation
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Quick Example
 
-## Need inspiration?
+```cpp
+#include "zep/editor.h"
+#include "zep/mode_vim.h"
+#include "zep/imgui/display_imgui.h"
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+// Create the editor
+auto editor = std::make_shared<Zep::ZepEditor>(
+    new Zep::ZepDisplay_ImGui()
+);
+
+// Add Vim mode
+editor->RegisterMode<Zep::ZepMode_Vim>();
+
+// Create a buffer
+auto buffer = editor->GetEmptyBuffer("MyFile.cpp");
+
+// Display in your render loop
+editor->Display();
+```
+
+## Integration Options
+
+<CardGroup cols={3}>
+  <Card title="Single Header" icon="file-code" href="/integration/single-header">
+    Include one header file in your project
+  </Card>
+  <Card title="CMake Library" icon="book" href="/integration/cmake-library">
+    Install as a system library via CMake
+  </Card>
+  <Card title="ImGui Backend" icon="window" href="/integration/imgui">
+    Render with Dear ImGui
+  </Card>
+  <Card title="Qt Backend" icon="desktop" href="/integration/qt">
+    Render with Qt Widgets
+  </Card>
+  <Card title="Custom Backend" icon="paintbrush" href="/concepts/display-layer">
+    Implement your own renderer
+  </Card>
+  <Card title="REPL Mode" icon="terminal" href="/guides/repl-integration">
+    Integrate scripting languages
+  </Card>
+</CardGroup>
+
+## Get Started
+
+<Steps>
+  <Step title="Install Zep">
+    Add Zep to your project as a single header or CMake library
+    
+    <Card title="Installation Guide" icon="download" href="/installation" horizontal>
+      Learn about installation options
+    </Card>
+  </Step>
+  
+  <Step title="Choose Your Backend">
+    Select ImGui, Qt, or implement a custom display backend
+    
+    <Card title="Integration Guide" icon="plug" href="/integration/overview" horizontal>
+      Explore integration options
+    </Card>
+  </Step>
+  
+  <Step title="Configure and Customize">
+    Set up editing modes, themes, and key mappings
+    
+    <Card title="Quickstart" icon="rocket" href="/quickstart" horizontal>
+      Get up and running quickly
+    </Card>
+  </Step>
+</Steps>
+
+## Learn More
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Understand Zep's layered design
+  </Card>
+  <Card title="API Reference" icon="book-open" href="/api/editor">
+    Explore the complete API documentation
+  </Card>
+  <Card title="Vim Mode" icon="keyboard" href="/guides/vim-mode">
+    Master Vim keybindings and commands
+  </Card>
+  <Card title="Examples" icon="lightbulb" href="https://github.com/Rezonality/zep/tree/master/demos">
+    Browse example applications
+  </Card>
+</CardGroup>

@@ -1,0 +1,629 @@
+---
+title: ZepEditor
+description: Core editor class that manages buffers, modes, windows, and the overall editing environment
+---
+
+## Overview
+
+The `ZepEditor` class is the central component of the Zep text editor library. It manages all buffers, editor modes, tab windows, syntax providers, and coordinates the overall editing experience.
+
+### Architecture
+
+```
+Editor
+    Buffers
+    Modes -> (Active BufferRegion)
+Display
+    BufferRegions (->Buffers)
+```
+
+- A buffer is an array of chars in a gap buffer with insert, delete, and search operations
+- A display shows a collection of regions and editor controls in a window
+- A buffer region is a single view onto a buffer inside the main display
+- Multiple regions can refer to the same buffer (N Regions : N Buffers)
+
+## Constructor
+
+### ZepEditor
+
+```cpp
+ZepEditor(ZepDisplay* pDisplay, const fs::path& root, uint32_t flags = 0, IZepFileSystem* pFileSystem = nullptr);
+```
+
+<ParamField path="pDisplay" type="ZepDisplay*" required>
+Pointer to the display implementation that will render the editor
+</ParamField>
+
+<ParamField path="root" type="const fs::path&" required>
+Root path to search for a config file
+</ParamField>
+
+<ParamField path="flags" type="uint32_t">
+Editor flags from `ZepEditorFlags` enum:
+- `None` (0): Default behavior
+- `DisableThreads` (1 &lt;&lt; 0): Disable background threading
+- `FastUpdate` (1 &lt;&lt; 1): Enable fast update mode
+</ParamField>
+
+<ParamField path="pFileSystem" type="IZepFileSystem*">
+Custom file system implementation, or nullptr to use default
+</ParamField>
+
+## Configuration
+
+### LoadConfig
+
+```cpp
+void LoadConfig(const fs::path& config_path);
+void LoadConfig(std::shared_ptr<cpptoml::table> spConfig);
+```
+
+<ParamField path="config_path" type="const fs::path&">
+Path to TOML configuration file
+</ParamField>
+
+<ParamField path="spConfig" type="std::shared_ptr<cpptoml::table>">
+Parsed TOML configuration table
+</ParamField>
+
+Load editor configuration from a file or parsed TOML table.
+
+### SaveConfig
+
+```cpp
+void SaveConfig(std::shared_ptr<cpptoml::table> spConfig);
+```
+
+<ParamField path="spConfig" type="std::shared_ptr<cpptoml::table>">
+TOML table to save current configuration to
+</ParamField>
+
+### GetConfig
+
+```cpp
+EditorConfig& GetConfig();
+```
+
+Returns a reference to the current `EditorConfig` which includes:
+- `showScrollBar`: Show/hide scrollbar
+- `style`: Normal or Minimal editor style
+- `lineMargins`: Margins around lines
+- `showLineNumbers`: Enable/disable line numbers
+- `shortTabNames`: Use shortened tab names
+- `cursorLineSolid`: Solid cursor line highlighting
+- `backgroundFadeTime`: Background fade animation duration
+
+## Buffer Management
+
+### InitWithFile
+
+```cpp
+ZepBuffer* InitWithFile(const std::string& str);
+```
+
+<ParamField path="str" type="const std::string&" required>
+Path to the file to open
+</ParamField>
+
+Initialize the editor with a file. Returns pointer to the created buffer.
+
+### InitWithFileOrDir
+
+```cpp
+ZepBuffer* InitWithFileOrDir(const std::string& str);
+```
+
+<ParamField path="str" type="const std::string&" required>
+Path to file or directory
+</ParamField>
+
+Initialize with a file or directory (creates tree view for directories).
+
+### InitWithText
+
+```cpp
+ZepBuffer* InitWithText(const std::string& strName, const std::string& strText);
+```
+
+<ParamField path="strName" type="const std::string&" required>
+Name for the buffer
+</ParamField>
+
+<ParamField path="strText" type="const std::string&" required>
+Initial text content
+</ParamField>
+
+Create a new buffer with specified name and text content.
+
+### GetFileBuffer
+
+```cpp
+ZepBuffer* GetFileBuffer(const fs::path& filePath, uint32_t fileFlags = 0, bool create = true);
+```
+
+<ParamField path="filePath" type="const fs::path&" required>
+Path to the file
+</ParamField>
+
+<ParamField path="fileFlags" type="uint32_t">
+Flags from `FileFlags` enum (ReadOnly, Locked, etc.)
+</ParamField>
+
+<ParamField path="create" type="bool">
+Create buffer if it doesn't exist (default: true)
+</ParamField>
+
+Get or create a buffer for a file path.
+
+### GetEmptyBuffer
+
+```cpp
+ZepBuffer* GetEmptyBuffer(const std::string& name, uint32_t fileFlags = 0);
+```
+
+<ParamField path="name" type="const std::string&" required>
+Name for the empty buffer
+</ParamField>
+
+<ParamField path="fileFlags" type="uint32_t">
+Buffer file flags
+</ParamField>
+
+Create a new empty buffer with the specified name.
+
+### SaveBuffer
+
+```cpp
+void SaveBuffer(ZepBuffer& buffer);
+void SaveBufferAs(ZepBuffer& buffer, fs::path filePath);
+```
+
+<ParamField path="buffer" type="ZepBuffer&" required>
+Buffer to save
+</ParamField>
+
+<ParamField path="filePath" type="fs::path">
+Path for Save As operation
+</ParamField>
+
+Save a buffer to disk or save as a new file.
+
+### GetBuffers
+
+```cpp
+const tBuffers& GetBuffers() const;
+```
+
+Returns all buffers managed by the editor as a `std::deque<std::shared_ptr<ZepBuffer>>`.
+
+### GetActiveBuffer
+
+```cpp
+ZepBuffer* GetActiveBuffer() const;
+```
+
+Returns the currently active buffer.
+
+### RemoveBuffer
+
+```cpp
+void RemoveBuffer(ZepBuffer* pBuffer);
+```
+
+<ParamField path="pBuffer" type="ZepBuffer*" required>
+Buffer to remove
+</ParamField>
+
+Remove a buffer from the editor.
+
+## Window Management
+
+### AddTabWindow
+
+```cpp
+ZepTabWindow* AddTabWindow();
+```
+
+Create and add a new tab window to the editor.
+
+### RemoveTabWindow
+
+```cpp
+void RemoveTabWindow(ZepTabWindow* pTabWindow);
+```
+
+<ParamField path="pTabWindow" type="ZepTabWindow*" required>
+Tab window to remove
+</ParamField>
+
+Remove a tab window from the editor.
+
+### GetActiveTabWindow
+
+```cpp
+ZepTabWindow* GetActiveTabWindow() const;
+```
+
+Returns the currently active tab window.
+
+### SetCurrentTabWindow
+
+```cpp
+void SetCurrentTabWindow(ZepTabWindow* pTabWindow);
+```
+
+<ParamField path="pTabWindow" type="ZepTabWindow*" required>
+Tab window to make active
+</ParamField>
+
+### NextTabWindow / PreviousTabWindow
+
+```cpp
+void NextTabWindow();
+void PreviousTabWindow();
+```
+
+Navigate to the next or previous tab window.
+
+### GetActiveWindow
+
+```cpp
+ZepWindow* GetActiveWindow() const;
+```
+
+Returns the currently active window.
+
+### SetCurrentWindow
+
+```cpp
+void SetCurrentWindow(ZepWindow* pWindow);
+```
+
+<ParamField path="pWindow" type="ZepWindow*" required>
+Window to make active
+</ParamField>
+
+### FindBufferWindows
+
+```cpp
+std::vector<ZepWindow*> FindBufferWindows(const ZepBuffer* pBuffer) const;
+```
+
+<ParamField path="pBuffer" type="const ZepBuffer*" required>
+Buffer to search for
+</ParamField>
+
+Find all windows displaying a specific buffer.
+
+## Mode Management
+
+### RegisterGlobalMode
+
+```cpp
+void RegisterGlobalMode(std::shared_ptr<ZepMode> spMode);
+```
+
+<ParamField path="spMode" type="std::shared_ptr<ZepMode>" required>
+Mode to register (Vim, Standard, etc.)
+</ParamField>
+
+Register an editor mode globally.
+
+### SetGlobalMode
+
+```cpp
+void SetGlobalMode(const std::string& currentMode);
+```
+
+<ParamField path="currentMode" type="const std::string&" required>
+Name of the mode to activate
+</ParamField>
+
+Set the active global editor mode.
+
+### GetGlobalMode
+
+```cpp
+ZepMode* GetGlobalMode();
+```
+
+Returns the current global mode.
+
+### RegisterBufferMode
+
+```cpp
+void RegisterBufferMode(const std::string& strExtension, std::shared_ptr<ZepMode> spMode);
+```
+
+<ParamField path="strExtension" type="const std::string&" required>
+File extension to associate with mode
+</ParamField>
+
+<ParamField path="spMode" type="std::shared_ptr<ZepMode>" required>
+Mode for this file type
+</ParamField>
+
+Register a mode for specific file extensions.
+
+## Syntax and Theme
+
+### RegisterSyntaxFactory
+
+```cpp
+void RegisterSyntaxFactory(const std::vector<std::string>& mappings, SyntaxProvider factory);
+```
+
+<ParamField path="mappings" type="const std::vector<std::string>&" required>
+File extensions or patterns
+</ParamField>
+
+<ParamField path="factory" type="SyntaxProvider" required>
+Factory function to create syntax highlighter
+</ParamField>
+
+Register a syntax highlighter factory for file types.
+
+### GetTheme
+
+```cpp
+ZepTheme& GetTheme() const;
+```
+
+Get the current editor theme.
+
+## Registers and Clipboard
+
+### SetRegister / GetRegister
+
+```cpp
+void SetRegister(const std::string& reg, const Register& val);
+void SetRegister(const char reg, const Register& val);
+const Register& GetRegister(const std::string& reg);
+const Register& GetRegister(const char reg);
+```
+
+<ParamField path="reg" type="const std::string& | char" required>
+Register name (single character or string)
+</ParamField>
+
+<ParamField path="val" type="const Register&">
+Register value containing text and line-wise flag
+</ParamField>
+
+Manage Vim-style registers for storing text fragments.
+
+### ReadClipboard / WriteClipboard
+
+```cpp
+void ReadClipboard();
+void WriteClipboard();
+```
+
+Interact with system clipboard.
+
+## Display and Rendering
+
+### Display
+
+```cpp
+void Display();
+```
+
+Render the editor to the display.
+
+### SetDisplayRegion
+
+```cpp
+void SetDisplayRegion(const NVec2f& topLeft, const NVec2f& bottomRight);
+```
+
+<ParamField path="topLeft" type="const NVec2f&" required>
+Top-left corner of display region
+</ParamField>
+
+<ParamField path="bottomRight" type="const NVec2f&" required>
+Bottom-right corner of display region
+</ParamField>
+
+Set the display area for the editor.
+
+### GetDisplay
+
+```cpp
+ZepDisplay& GetDisplay() const;
+```
+
+Get the display implementation.
+
+## Mouse Input
+
+### OnMouseMove
+
+```cpp
+bool OnMouseMove(const NVec2f& mousePos);
+```
+
+<ParamField path="mousePos" type="const NVec2f&" required>
+Mouse position in window coordinates
+</ParamField>
+
+Handle mouse movement. Returns true if handled.
+
+### OnMouseDown / OnMouseUp
+
+```cpp
+bool OnMouseDown(const NVec2f& mousePos, ZepMouseButton button);
+bool OnMouseUp(const NVec2f& mousePos, ZepMouseButton button);
+```
+
+<ParamField path="mousePos" type="const NVec2f&" required>
+Mouse position
+</ParamField>
+
+<ParamField path="button" type="ZepMouseButton" required>
+Mouse button: Left, Middle, Right, or Unknown
+</ParamField>
+
+Handle mouse button events.
+
+### OnMouseWheel
+
+```cpp
+bool OnMouseWheel(const NVec2f& mousePos, float scrollDistance);
+```
+
+<ParamField path="mousePos" type="const NVec2f&" required>
+Mouse position
+</ParamField>
+
+<ParamField path="scrollDistance" type="float" required>
+Scroll wheel distance
+</ParamField>
+
+Handle mouse wheel scrolling.
+
+## Commands
+
+### RegisterExCommand
+
+```cpp
+void RegisterExCommand(std::shared_ptr<ZepExCommand> spMode);
+```
+
+<ParamField path="spMode" type="std::shared_ptr<ZepExCommand>" required>
+Ex command to register
+</ParamField>
+
+Register a Vim-style ex command (like :w, :q, etc.).
+
+### FindExCommand
+
+```cpp
+ZepExCommand* FindExCommand(const std::string& strName);
+```
+
+<ParamField path="strName" type="const std::string&" required>
+Command name to find
+</ParamField>
+
+Find a registered ex command by name.
+
+### SetCommandText
+
+```cpp
+void SetCommandText(const std::string& strCommand);
+```
+
+<ParamField path="strCommand" type="const std::string&" required>
+Command text to display
+</ParamField>
+
+Set the command line text.
+
+### GetCommandText
+
+```cpp
+std::string GetCommandText() const;
+```
+
+Get the current command line text.
+
+## Messaging and Events
+
+### Broadcast
+
+```cpp
+bool Broadcast(std::shared_ptr<ZepMessage> payload);
+```
+
+<ParamField path="payload" type="std::shared_ptr<ZepMessage>" required>
+Message to broadcast to all registered components
+</ParamField>
+
+Broadcast a message to all registered components. Returns true if handled.
+
+### RegisterCallback / UnRegisterCallback
+
+```cpp
+void RegisterCallback(IZepComponent* pClient);
+void UnRegisterCallback(IZepComponent* pClient);
+```
+
+<ParamField path="pClient" type="IZepComponent*" required>
+Component to register/unregister for notifications
+</ParamField>
+
+Manage component notification subscriptions.
+
+## Utility Methods
+
+### GetFileSystem
+
+```cpp
+IZepFileSystem& GetFileSystem() const;
+```
+
+Get the file system interface.
+
+### GetThreadPool
+
+```cpp
+ThreadPool& GetThreadPool() const;
+```
+
+Get the thread pool for background operations.
+
+### RequestRefresh
+
+```cpp
+void RequestRefresh();
+bool RefreshRequired();
+```
+
+Request a display refresh or check if refresh is needed.
+
+### Reset
+
+```cpp
+void Reset();
+```
+
+Reset the editor to initial state.
+
+### RequestQuit
+
+```cpp
+void RequestQuit();
+```
+
+Request the editor to quit.
+
+## Usage Example
+
+```cpp
+#include <zep/editor.h>
+#include <zep/mode_vim.h>
+
+// Create display implementation
+auto* pDisplay = new MyZepDisplay();
+
+// Create editor with root path and default settings
+ZepEditor editor(pDisplay, "/path/to/config");
+
+// Register Vim mode
+auto spVim = std::make_shared<ZepMode_Vim>(editor);
+editor.RegisterGlobalMode(spVim);
+editor.SetGlobalMode("vim");
+
+// Open a file
+ZepBuffer* pBuffer = editor.InitWithFile("main.cpp");
+
+// Create a tab window and display
+ZepTabWindow* pTab = editor.AddTabWindow();
+
+// Main loop
+while (running) {
+    editor.Display();
+    // Handle input...
+}
+```

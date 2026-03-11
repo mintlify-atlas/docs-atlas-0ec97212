@@ -1,0 +1,366 @@
+---
+title: ZepWindow
+description: Display window class that renders a buffer view and handles cursor, scrolling, and line layout
+---
+
+## Overview
+
+The `ZepWindow` class represents a single pane displaying a buffer. It manages the visual presentation of text, including cursor positioning, scrolling, line layout, syntax highlighting display, and user interactions like mouse events. Multiple windows can display the same buffer with independent cursor positions and scroll states.
+
+## Constructor
+
+### ZepWindow
+
+```cpp
+ZepWindow(ZepTabWindow& window, ZepBuffer* buffer);
+```
+
+<ParamField path="window" type="ZepTabWindow&" required>
+Parent tab window that contains this window
+</ParamField>
+
+<ParamField path="buffer" type="ZepBuffer*" required>
+Buffer to display in this window
+</ParamField>
+
+Create a new window displaying the specified buffer.
+
+## Display Management
+
+### Display
+
+```cpp
+virtual void Display();
+```
+
+Render the window content, including text, cursor, line numbers, scrollbars, and markers.
+
+### SetDisplayRegion
+
+```cpp
+virtual void SetDisplayRegion(const NRectf& region);
+```
+
+<ParamField path="region" type="const NRectf&" required>
+Rectangle defining the window's display area
+</ParamField>
+
+Set the screen region where this window should be displayed.
+
+## Buffer Management
+
+### GetBuffer
+
+```cpp
+virtual ZepBuffer& GetBuffer() const;
+```
+
+Get the buffer displayed in this window.
+
+### SetBuffer
+
+```cpp
+virtual void SetBuffer(ZepBuffer* pBuffer);
+```
+
+<ParamField path="pBuffer" type="ZepBuffer*" required>
+New buffer to display
+</ParamField>
+
+Change the buffer displayed in this window.
+
+## Cursor Management
+
+### GetBufferCursor
+
+```cpp
+virtual GlyphIterator GetBufferCursor();
+```
+
+Get the current cursor position in buffer coordinates.
+
+### SetBufferCursor
+
+```cpp
+virtual void SetBufferCursor(GlyphIterator location);
+```
+
+<ParamField path="location" type="GlyphIterator" required>
+New cursor position in the buffer
+</ParamField>
+
+Set the cursor to a specific buffer location. The window will scroll to make the cursor visible.
+
+### MoveCursorY
+
+```cpp
+virtual void MoveCursorY(int yDistance, LineLocation clampLocation = LineLocation::LineLastNonCR);
+```
+
+<ParamField path="yDistance" type="int" required>
+Number of lines to move (positive = down, negative = up)
+</ParamField>
+
+<ParamField path="clampLocation" type="LineLocation">
+Where to clamp cursor horizontally when moving between lines (default: LineLastNonCR)
+</ParamField>
+
+Move the cursor vertically by the specified number of lines.
+
+### BufferToDisplay
+
+```cpp
+virtual NVec2i BufferToDisplay();
+```
+
+Convert the current buffer cursor position to display coordinates. Returns the (x, y) position on screen.
+
+## Window Flags
+
+### SetWindowFlags
+
+```cpp
+virtual void SetWindowFlags(uint32_t windowFlags);
+```
+
+<ParamField path="windowFlags" type="uint32_t" required>
+Flags from `WindowFlags` enum:
+- `None` (0): No special flags
+- `ShowWhiteSpace` (1 &lt;&lt; 0): Show whitespace characters
+- `ShowCR` (1 &lt;&lt; 1): Show carriage return characters
+- `ShowLineNumbers` (1 &lt;&lt; 2): Display line numbers
+- `ShowIndicators` (1 &lt;&lt; 3): Show indicator column
+- `HideScrollBar` (1 &lt;&lt; 4): Hide the scrollbar
+- `Modal` (1 &lt;&lt; 5): Window is modal
+- `WrapText` (1 &lt;&lt; 6): Enable text wrapping (experimental)
+- `HideSplitMark` (1 &lt;&lt; 7): Hide split window marker
+- `GridStyle` (1 &lt;&lt; 8): Use grid-style display
+</ParamField>
+
+Set window display flags.
+
+### GetWindowFlags
+
+```cpp
+virtual uint32_t GetWindowFlags() const;
+```
+
+Get the current window flags.
+
+### ToggleFlag
+
+```cpp
+virtual void ToggleFlag(uint32_t flag);
+```
+
+<ParamField path="flag" type="uint32_t" required>
+Flag to toggle
+</ParamField>
+
+Toggle a specific window flag on or off.
+
+## Display Information
+
+### GetMaxDisplayLines
+
+```cpp
+virtual long GetMaxDisplayLines();
+```
+
+Get the maximum number of lines that can be displayed in the window viewport.
+
+### GetNumDisplayedLines
+
+```cpp
+virtual long GetNumDisplayedLines();
+```
+
+Get the actual number of lines currently being displayed.
+
+## Parent Tab Window
+
+### GetTabWindow
+
+```cpp
+ZepTabWindow& GetTabWindow() const;
+```
+
+Get the parent tab window that contains this window.
+
+## Color and Theme
+
+### FilterActiveColor
+
+```cpp
+NVec4f FilterActiveColor(const NVec4f& col, float atten = 1.0f);
+```
+
+<ParamField path="col" type="const NVec4f&" required>
+Original RGBA color
+</ParamField>
+
+<ParamField path="atten" type="float">
+Attenuation factor (default: 1.0)
+</ParamField>
+
+Filter a color based on whether this window is active. Inactive windows have dimmed colors.
+
+## Layout Management
+
+### DirtyLayout
+
+```cpp
+void DirtyLayout();
+```
+
+Mark the window layout as needing recalculation. Call this when buffer content changes or window size changes.
+
+## Window Regions
+
+The window is divided into several internal regions:
+
+<Expandable title="Internal Region Structure">
+- **Buffer Region**: Overall window area
+- **Edit Region**: Area where editing occurs
+- **Text Region**: Region containing actual text content
+- **Airline Region**: Status line at bottom of window
+- **Number Region**: Line numbers column
+- **Indicator Region**: Indicator column between numbers and text (for breakpoints, etc.)
+- **Vertical Scroll Region**: Scrollbar area
+- **Expanding Edit Region**: Container for text with flexible sizing
+</Expandable>
+
+## Cursor Types
+
+Windows support different cursor display modes:
+
+```cpp
+enum class CursorType
+{
+    None,        // No cursor displayed
+    Normal,      // Normal mode cursor (block)
+    Insert,      // Insert mode cursor (line)
+    Visual,      // Visual mode cursor (selection)
+    LineMarker   // Line marker cursor
+};
+```
+
+## Span Information
+
+The window calculates `SpanInfo` structures for each displayed line:
+
+<Expandable title="SpanInfo Structure">
+```cpp
+struct SpanInfo
+{
+    ByteRange lineByteRange;              // Start/end in buffer
+    std::vector<LineCharInfo> lineCodePoints; // Character positions
+    long bufferLineNumber;                // Original buffer line number
+    float yOffsetPx;                      // Pixel Y offset
+    NVec2f lineTextSizePx;               // Size of text in pixels
+    int spanLineIndex;                    // Index in span list
+    NVec2f padding;                       // Line padding
+    bool isSplitContinuation;            // True if wrapped line
+    NVec2f lineWidgetHeights;            // Height of line widgets
+    ZepFont* pFont;                       // Font for this line
+    
+    float FullLineHeightPx() const;      // Total line height
+    long ByteLength() const;             // Line byte length
+    bool BufferCursorInside(GlyphIterator offset) const;
+};
+```
+</Expandable>
+
+## Airline Status Bar
+
+Windows can display an "airline" status bar showing buffer information:
+
+```cpp
+struct Airline
+{
+    std::vector<AirBox> leftBoxes;  // Left-aligned status boxes
+    std::vector<AirBox> rightBoxes; // Right-aligned status boxes
+};
+
+struct AirBox
+{
+    std::string text;       // Box text content
+    NVec4f background;      // Box background color
+};
+```
+
+## Tool Tips
+
+Windows support displaying tooltips for markers (errors, warnings, etc.):
+
+```cpp
+struct ToolTipMessage : public ZepMessage
+{
+    ZepBuffer* pBuffer;         // Buffer containing the marker
+    GlyphIterator location;     // Location in buffer
+    std::shared_ptr<RangeMarker> spMarker; // The marker to display
+};
+```
+
+## Usage Example
+
+```cpp
+#include <zep/window.h>
+#include <zep/tab_window.h>
+#include <zep/buffer.h>
+
+// Create tab window and buffer
+ZepTabWindow* pTabWindow = editor.AddTabWindow();
+ZepBuffer* pBuffer = editor.GetFileBuffer("main.cpp");
+
+// Create window
+ZepWindow window(*pTabWindow, pBuffer);
+
+// Configure window
+window.SetWindowFlags(WindowFlags::ShowLineNumbers | 
+                      WindowFlags::ShowIndicators |
+                      WindowFlags::ShowWhiteSpace);
+
+// Set display region
+NRectf region(0, 0, 800, 600);
+window.SetDisplayRegion(region);
+
+// Set cursor position
+GlyphIterator pos = pBuffer->Begin();
+window.SetBufferCursor(pos);
+
+// Move cursor down 10 lines
+window.MoveCursorY(10);
+
+// Display the window
+window.Display();
+
+// Check if window is active
+if (editor.GetActiveWindow() == &window)
+{
+    // This window is active
+}
+
+// Toggle line numbers
+window.ToggleFlag(WindowFlags::ShowLineNumbers);
+```
+
+## Display Passes
+
+The window renders in multiple passes:
+
+1. **Background pass**: Line backgrounds, selections, cursor line
+2. **Text pass**: Actual text with syntax highlighting
+3. **Decoration pass**: Whitespace indicators, special characters
+4. **Overlay pass**: Scrollbars, line numbers, markers
+5. **Tooltip pass**: Hover tooltips for errors/warnings
+
+## Performance Considerations
+
+<Expandable title="Optimization Tips">
+- Windows cache line span information to avoid recalculation
+- Only visible lines are rendered
+- Layout is marked dirty only when necessary
+- Syntax highlighting is performed incrementally
+- Scrolling uses pixel offsets for smooth movement
+</Expandable>

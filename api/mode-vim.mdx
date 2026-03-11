@@ -1,0 +1,285 @@
+---
+title: "ZepMode_Vim"
+description: "Vim-style modal editing implementation"
+---
+
+## Overview
+
+`ZepMode_Vim` implements Vim-style modal editing in Zep, providing familiar keyboard navigation and editing commands for Vim users. This mode supports Normal, Insert, Visual, and Ex modes with traditional Vim key bindings.
+
+## Class Definition
+
+```cpp
+class ZepMode_Vim : public ZepMode
+```
+
+Inherits from [ZepMode](/api/mode) and implements Vim-style editing behavior.
+
+### Constructor
+
+```cpp
+ZepMode_Vim(ZepEditor& editor)
+```
+
+Creates a new Vim mode instance.
+
+<ParamField path="editor" type="ZepEditor&" required>
+  Reference to the parent ZepEditor instance
+</ParamField>
+
+## Core Methods
+
+### Init
+
+```cpp
+virtual void Init() override
+```
+
+Initializes the Vim mode and sets up all key mappings. This is called once during mode creation.
+
+### Begin
+
+```cpp
+virtual void Begin(ZepWindow* pWindow) override
+```
+
+Activates Vim mode for the specified window.
+
+<ParamField path="pWindow" type="ZepWindow*" required>
+  The window to activate Vim mode in
+</ParamField>
+
+### Name
+
+```cpp
+virtual const char* Name() const override
+static const char* StaticName()
+```
+
+Returns the mode name "Vim".
+
+**Returns:** `"Vim"`
+
+### DefaultMode
+
+```cpp
+virtual EditorMode DefaultMode() const override
+```
+
+Returns the default editor mode for Vim (Normal mode).
+
+**Returns:** `EditorMode::Normal`
+
+### PreDisplay
+
+```cpp
+virtual void PreDisplay(ZepWindow& win) override
+```
+
+Prepares the window for display, updating mode-specific visual elements.
+
+<ParamField path="win" type="ZepWindow&" required>
+  The window being prepared for display
+</ParamField>
+
+### UsesRelativeLines
+
+```cpp
+virtual bool UsesRelativeLines() const override
+```
+
+Indicates that Vim mode uses relative line numbering (like Vim's `relativenumber` option).
+
+**Returns:** `true`
+
+<Info>
+  Relative line numbering displays distances from the current line, making it easier to use motion commands like `5j` or `3k`.
+</Info>
+
+## Key Mapping Methods
+
+These methods set up various categories of Vim key bindings:
+
+### SetupKeyMaps
+
+```cpp
+virtual void SetupKeyMaps()
+```
+
+Sets up all key mappings for Vim mode. This calls the other mapping methods to configure the complete Vim keymap.
+
+### AddNavigationKeyMaps
+
+```cpp
+virtual void AddNavigationKeyMaps(bool allowInVisualMode = true)
+```
+
+Adds navigation key mappings (h, j, k, l, w, b, e, etc.).
+
+<ParamField path="allowInVisualMode" type="bool" default="true">
+  Whether to enable these mappings in Visual mode
+</ParamField>
+
+### AddSearchKeyMaps
+
+```cpp
+virtual void AddSearchKeyMaps()
+```
+
+Adds search-related key mappings (/, ?, n, N, *, #).
+
+### AddGlobalKeyMaps
+
+```cpp
+virtual void AddGlobalKeyMaps()
+```
+
+Adds global key mappings that work across all modes (like Escape).
+
+### AddCopyMaps
+
+```cpp
+virtual void AddCopyMaps()
+```
+
+Adds copy/yank key mappings (y, yy, Y).
+
+### AddPasteMaps
+
+```cpp
+virtual void AddPasteMaps()
+```
+
+Adds paste key mappings (p, P).
+
+### AddOverStrikeMaps
+
+```cpp
+virtual void AddOverStrikeMaps()
+```
+
+Adds overstrike/replace key mappings (r, R).
+
+## Vim Motions
+
+The mode supports various motion types:
+
+```cpp
+enum class VimMotion
+{
+    LineBegin,           // ^ - First non-whitespace character
+    LineEnd,             // $ - End of line
+    NonWhiteSpaceBegin,  // ^ - First non-whitespace
+    NonWhiteSpaceEnd     // g_ - Last non-whitespace
+}
+```
+
+<Note>
+  These motions can be combined with operators like delete (d), change (c), and yank (y) to form complex commands.
+</Note>
+
+## Supported Vim Commands
+
+### Normal Mode
+
+- **Navigation:** h, j, k, l, w, b, e, ge, W, B, E, 0, ^, $, gg, G
+- **Editing:** x, X, dd, D, C, s, S, i, I, a, A, o, O
+- **Copy/Paste:** y, yy, Y, p, P
+- **Undo/Redo:** u, Ctrl+R
+- **Search:** /, ?, n, N, *, #
+- **Visual:** v, V
+
+### Insert Mode
+
+- **Exit:** Escape, Ctrl+[
+- Standard text input
+
+### Visual Mode
+
+- **Selection:** v (character), V (line)
+- **Operations:** d, c, y, &gt;, &lt;
+- All navigation commands
+
+### Ex Mode
+
+- **Commands:** :w, :q, :wq, :e, and more
+- Accessed via `:` from Normal mode
+
+## Usage Example
+
+```cpp
+#include <zep/mode_vim.h>
+#include <zep/editor.h>
+
+// Create editor
+auto editor = std::make_unique<ZepEditor>(display);
+
+// Create and register Vim mode
+auto vimMode = std::make_shared<ZepMode_Vim>(*editor);
+vimMode->Init();
+editor->RegisterMode(vimMode);
+
+// Set Vim as the active mode
+editor->SetMode(ZepMode_Vim::StaticName());
+
+// The editor now responds to Vim commands
+// For example, pressing 'i' enters Insert mode
+// Pressing Escape returns to Normal mode
+
+// Get current window and start using Vim mode
+auto window = editor->GetActiveWindow();
+vimMode->Begin(window);
+
+// Mode automatically handles key presses
+vimMode->AddKeyPress('i');  // Enter insert mode
+vimMode->AddKeyPress('H');  // Type 'H'
+vimMode->AddKeyPress('i');  // Type 'i'
+vimMode->AddKeyPress(ExtKeys::ESCAPE);  // Back to normal mode
+vimMode->AddKeyPress('d');  // Start delete operation
+vimMode->AddKeyPress('d');  // Complete: delete line
+```
+
+## Configuration Example
+
+```cpp
+// Custom Vim mode with additional key mappings
+class MyVimMode : public ZepMode_Vim
+{
+public:
+    MyVimMode(ZepEditor& editor) : ZepMode_Vim(editor) {}
+    
+    void Init() override
+    {
+        // Initialize base Vim mappings
+        ZepMode_Vim::Init();
+        
+        // Add custom mappings
+        // Example: map 'jk' to escape in insert mode
+        m_insertMap.AddKeyMapSequence("jk", 
+            {ExtKeys::ESCAPE}, 
+            StringId("ExitInsert"));
+    }
+};
+```
+
+<Info>
+  Vim mode maintains separate key maps for Normal, Insert, and Visual modes, allowing mode-specific key bindings.
+</Info>
+
+## Editor Modes in Vim
+
+Vim mode cycles through different `EditorMode` states:
+
+- **EditorMode::Normal** - Command mode (default)
+- **EditorMode::Insert** - Text insertion mode
+- **EditorMode::Visual** - Visual selection mode
+- **EditorMode::Ex** - Colon command mode
+
+See [ZepMode](/api/mode#editormode) for the complete `EditorMode` enum definition.
+
+## See Also
+
+- [ZepMode](/api/mode) - Base mode class
+- [ZepMode_Standard](/api/mode-standard) - Standard editor mode
+- [ZepWindow](/api/window) - Window management
+- [ZepBuffer](/api/buffer) - Buffer operations

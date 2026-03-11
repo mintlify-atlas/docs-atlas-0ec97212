@@ -1,0 +1,367 @@
+---
+title: "Text Markers"
+description: "Add visual annotations to your text with the RangeMarker system"
+---
+
+## Overview
+
+Text markers in Zep are visual adornments that appear over text in the buffer. They're used to highlight errors, warnings, search results, tooltips, and custom annotations without modifying the underlying text.
+
+<Note>
+Markers live on the buffer but are not stored with it - they must be managed externally and are not part of the undo/redo system.
+</Note>
+
+## Creating a Range Marker
+
+A `RangeMarker` highlights a range of text in a buffer.
+
+### Basic Usage
+
+```cpp
+#include "zep/range_markers.h"
+
+// Create a marker on a buffer
+auto spMarker = std::make_shared<RangeMarker>(buffer);
+
+// Set the range (byte offsets in the buffer)
+ByteRange range(startByteOffset, endByteOffset);
+spMarker->SetRange(range);
+
+// Add to buffer
+buffer.AddRangeMarker(spMarker);
+```
+
+## Marker Display Types
+
+Configure how markers appear using display type flags:
+
+<CodeGroup>
+
+```cpp Underline
+spMarker->displayType = RangeMarkerDisplayType::Underline;
+```
+
+```cpp Background Highlight
+spMarker->displayType = RangeMarkerDisplayType::Background;
+```
+
+```cpp Tooltip
+spMarker->displayType = RangeMarkerDisplayType::Tooltip;
+```
+
+```cpp Indicator
+spMarker->displayType = RangeMarkerDisplayType::Indicator;
+```
+
+```cpp Combined
+// Multiple display types can be combined
+spMarker->displayType = RangeMarkerDisplayType::Underline | 
+                         RangeMarkerDisplayType::Tooltip;
+```
+
+</CodeGroup>
+
+### Display Type Reference
+
+| Type | Description |
+|------|-------------|
+| `Hidden` | Marker is not visible |
+| `Underline` | Underlines the text range |
+| `Background` | Adds a background color to the range |
+| `Tooltip` | Shows a tooltip when hovering |
+| `TooltipAtLine` | Shows tooltip when hovering the line |
+| `CursorTip` | Shows tooltip when cursor is on the marker |
+| `CursorTipAtLine` | Shows tooltip when cursor is on the marker's line |
+| `Indicator` | Shows an indicator on the left side |
+| `Timed` | Marker fades out over time |
+
+### Pre-configured Display Types
+
+```cpp
+// For compiler errors with full visual feedback
+spMarker->displayType = RangeMarkerDisplayType::CompileError;
+// Equivalent to: Tooltip | CursorTip | Indicator | Background
+
+// Simple background mark
+spMarker->displayType = RangeMarkerDisplayType::BackgroundMark;
+```
+
+## Customizing Marker Appearance
+
+<Steps>
+
+### Set Colors
+
+Use theme colors to style your markers:
+
+```cpp
+// Set individual colors
+spMarker->SetBackgroundColor(ThemeColor::Error);
+spMarker->SetTextColor(ThemeColor::Text);
+spMarker->SetHighlightColor(ThemeColor::Warning);
+
+// Or set all at once
+spMarker->SetColors(
+    ThemeColor::Error,      // background
+    ThemeColor::Text,       // text
+    ThemeColor::Warning     // highlight (underline, border)
+);
+```
+
+### Set Transparency
+
+```cpp
+// Set alpha value (0.0 = transparent, 1.0 = opaque)
+spMarker->SetAlpha(0.5f);
+```
+
+### Add Tooltip Text
+
+```cpp
+// Set name and description for tooltips
+spMarker->SetName("Error");
+spMarker->SetDescription("Undefined variable 'x'");
+
+// Configure tooltip position
+spMarker->tipPos = ToolTipPos::AboveLine;  // or BelowLine, RightLine
+```
+
+</Steps>
+
+## Marker Types
+
+Classify markers by type for filtering and querying:
+
+```cpp
+// Set marker type
+spMarker->markerType = RangeMarkerType::Mark;        // General marks
+spMarker->markerType = RangeMarkerType::Search;      // Search results
+spMarker->markerType = RangeMarkerType::Widget;      // Inline widgets
+spMarker->markerType = RangeMarkerType::LineWidget;  // Line widgets
+
+// Or combine types
+spMarker->markerType = RangeMarkerType::Mark | RangeMarkerType::Search;
+```
+
+## Error and Warning Markers
+
+Create compiler-style error markers:
+
+```cpp
+void AddErrorMarker(ZepBuffer& buffer, ByteRange range, 
+                    const std::string& message)
+{
+    auto spMarker = std::make_shared<RangeMarker>(buffer);
+    
+    // Configure as a compile error
+    spMarker->SetRange(range);
+    spMarker->displayType = RangeMarkerDisplayType::CompileError;
+    spMarker->markerType = RangeMarkerType::Mark;
+    
+    // Set error styling
+    spMarker->SetColors(
+        ThemeColor::Error,
+        ThemeColor::Text,
+        ThemeColor::Error
+    );
+    
+    // Add error message
+    spMarker->SetName("Error");
+    spMarker->SetDescription(message);
+    
+    buffer.AddRangeMarker(spMarker);
+}
+```
+
+### Warning Markers
+
+```cpp
+void AddWarningMarker(ZepBuffer& buffer, ByteRange range,
+                      const std::string& message)
+{
+    auto spMarker = std::make_shared<RangeMarker>(buffer);
+    
+    spMarker->SetRange(range);
+    spMarker->displayType = RangeMarkerDisplayType::Underline | 
+                             RangeMarkerDisplayType::CursorTip;
+    
+    // Use warning colors
+    spMarker->SetColors(
+        ThemeColor::None,
+        ThemeColor::Text,
+        ThemeColor::Warning
+    );
+    
+    spMarker->SetName("Warning");
+    spMarker->SetDescription(message);
+    
+    buffer.AddRangeMarker(spMarker);
+}
+```
+
+## Managing Markers
+
+### Remove Markers
+
+```cpp
+// Remove a specific marker
+buffer.ClearRangeMarker(spMarker);
+
+// Remove all markers of a type
+buffer.ClearRangeMarkers(RangeMarkerType::Search);
+```
+
+### Query Markers
+
+```cpp
+// Get markers at a specific location
+GlyphIterator location = buffer.Begin() + offset;
+if (spMarker->ContainsLocation(location))
+{
+    // Location is within marker range
+}
+
+// Check if marker intersects a range
+ByteRange queryRange(start, end);
+if (spMarker->IntersectsRange(queryRange))
+{
+    // Marker overlaps with query range
+}
+```
+
+### Enable/Disable Markers
+
+```cpp
+// Temporarily disable a marker
+spMarker->SetEnabled(false);
+
+// Re-enable it later
+spMarker->SetEnabled(true);
+```
+
+## Animated Flash Markers
+
+Create markers that fade out over time:
+
+```cpp
+auto spFlash = std::make_shared<RangeMarker>(buffer);
+spFlash->SetRange(range);
+spFlash->displayType = RangeMarkerDisplayType::Background | 
+                        RangeMarkerDisplayType::Timed;
+spFlash->flashType = FlashType::Flash;
+spFlash->duration = 1.0f;  // Fade out over 1 second
+spFlash->SetBackgroundColor(ThemeColor::Info);
+
+buffer.AddRangeMarker(spFlash);
+```
+
+## Marker Behavior on Edit
+
+Markers automatically adjust when the buffer is edited:
+
+<Note>
+**Default Behavior:**
+- Markers move down if text is inserted before them
+- Markers move up if text is deleted before them
+- Markers are removed if text is edited inside them
+</Note>
+
+### Custom Marker Classes
+
+Create a custom marker with different edit behavior:
+
+```cpp
+class PersistentMarker : public RangeMarker
+{
+public:
+    PersistentMarker(ZepBuffer& buffer) : RangeMarker(buffer) {}
+    
+    // Override to customize insert behavior
+    void HandleBufferInsert(ZepBuffer& buffer, 
+                           const GlyphIterator& itrStart,
+                           const std::string& str) override
+    {
+        // Custom logic - e.g., expand marker to include new text
+        auto currentRange = GetRange();
+        if (itrStart.Index() >= currentRange.first && 
+            itrStart.Index() <= currentRange.second)
+        {
+            // Expand range
+            SetRange(ByteRange(currentRange.first, 
+                              currentRange.second + str.size()));
+        }
+        else
+        {
+            // Call base implementation
+            RangeMarker::HandleBufferInsert(buffer, itrStart, str);
+        }
+    }
+};
+```
+
+## Inline Widgets
+
+Markers can host inline widgets:
+
+```cpp
+auto spMarker = std::make_shared<RangeMarker>(buffer);
+spMarker->SetRange(range);
+spMarker->markerType = RangeMarkerType::Widget;
+
+// Set widget size
+spMarker->SetInlineSize(NVec2f(100.0f, 50.0f));
+
+// Attach custom widget
+spMarker->spWidget = myCustomWidget;
+
+buffer.AddRangeMarker(spMarker);
+```
+
+## Complete Example
+
+<Warning>
+Always check that the byte range is valid before creating markers. Invalid ranges can cause rendering issues.
+</Warning>
+
+```cpp
+void HighlightSearchResults(ZepBuffer& buffer, const std::string& searchTerm)
+{
+    // Clear existing search markers
+    buffer.ClearRangeMarkers(RangeMarkerType::Search);
+    
+    // Find all occurrences
+    auto& text = buffer.GetWorkingBuffer().string();
+    size_t pos = 0;
+    
+    while ((pos = text.find(searchTerm, pos)) != std::string::npos)
+    {
+        // Create marker for this match
+        auto spMarker = std::make_shared<RangeMarker>(buffer);
+        
+        ByteRange range(pos, pos + searchTerm.length());
+        spMarker->SetRange(range);
+        
+        // Configure as search result
+        spMarker->markerType = RangeMarkerType::Search;
+        spMarker->displayType = RangeMarkerDisplayType::Background;
+        spMarker->SetBackgroundColor(ThemeColor::VisualSelectBackground);
+        
+        buffer.AddRangeMarker(spMarker);
+        pos += searchTerm.length();
+    }
+}
+```
+
+## Best Practices
+
+1. **Use appropriate marker types** - This helps with filtering and performance
+2. **Clean up markers** - Remove markers when they're no longer needed
+3. **Validate ranges** - Ensure byte offsets are within buffer bounds
+4. **Use theme colors** - Respect the user's color scheme
+5. **Minimize marker count** - Too many markers can impact performance
+
+## Next Steps
+
+- Learn about [Window Management](/advanced/window-management) to display markers across splits
+- Explore [Custom Modes](/advanced/custom-modes) to integrate markers with mode behavior
+- Configure marker settings in [Configuration](/advanced/configuration)

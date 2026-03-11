@@ -1,0 +1,389 @@
+---
+title: GlyphIterator
+description: UTF-8 aware iterator for navigating text buffers by Unicode code points
+---
+
+## Overview
+
+The `GlyphIterator` is a UTF-8 sensitive iterator designed specifically for text buffer navigation. Unlike raw byte iterators, it understands Unicode and moves by complete code points rather than individual bytes. It's aware of the gap buffer structure and automatically clamps to valid positions.
+
+This is the primary "pointer" into text used throughout the Zep editor.
+
+Source: `include/zep/glyph_iterator.h:41`
+
+## Key Features
+
+- **UTF-8 aware**: Moves by complete Unicode code points, not bytes
+- **Gap buffer compatible**: Knows how to navigate the gap buffer structure
+- **Auto-clamping**: Automatically clamps to valid buffer positions
+- **Line-aware**: Can clamp movement to line boundaries
+
+## Declaration
+
+```cpp
+class GlyphIterator
+{
+public:
+    explicit GlyphIterator(const ZepBuffer* buffer = nullptr, 
+                           unsigned long offset = 0);
+    GlyphIterator(const GlyphIterator& itr);
+    // ...
+};
+```
+
+Source: `include/zep/glyph_iterator.h:44-45`
+
+## Construction
+
+### Constructor
+
+```cpp
+explicit GlyphIterator(const ZepBuffer* buffer = nullptr, 
+                       unsigned long offset = 0)
+```
+
+**Parameters:**
+- `buffer` - Pointer to the ZepBuffer to iterate over
+- `offset` - Initial byte offset position (default: 0)
+
+### Copy Constructor
+
+```cpp
+GlyphIterator(const GlyphIterator& itr)
+```
+
+Creates a copy of an existing iterator.
+
+Source: `include/zep/glyph_iterator.h:44-45`
+
+## Position and Validity
+
+### Index()
+
+```cpp
+long Index() const
+```
+
+Returns the current byte index in the buffer.
+
+Source: `include/zep/glyph_iterator.h:47`
+
+### Valid()
+
+```cpp
+bool Valid() const
+```
+
+Returns `true` if the iterator is in a valid state (associated with a buffer and pointing to a valid position).
+
+Source: `include/zep/glyph_iterator.h:48`
+
+### Invalidate()
+
+```cpp
+void Invalidate()
+```
+
+Marks the iterator as invalid. Used to represent error states or uninitialized positions.
+
+Source: `include/zep/glyph_iterator.h:49`
+
+## Movement Operations
+
+### Forward/Backward by Code Points
+
+#### Postfix Increment/Decrement
+
+```cpp
+GlyphIterator operator++(int)  // Move forward one code point
+GlyphIterator operator--(int)  // Move backward one code point
+```
+
+Returns a copy of the iterator before moving, then advances/retreats by one Unicode code point.
+
+Source: `include/zep/glyph_iterator.h:56-57`
+
+#### Compound Assignment
+
+```cpp
+void operator+=(long count)  // Move forward by count code points
+void operator-=(long count)  // Move backward by count code points
+```
+
+Moves the iterator by the specified number of code points.
+
+Source: `include/zep/glyph_iterator.h:58-59`
+
+#### Arithmetic Operators
+
+```cpp
+GlyphIterator operator+(long value) const
+GlyphIterator operator-(long value) const
+```
+
+Returns a new iterator moved by the specified number of code points.
+
+Source: `include/zep/glyph_iterator.h:61-62`
+
+### Move()
+
+```cpp
+GlyphIterator& Move(long count)
+```
+
+Moves the iterator by `count` code points (positive for forward, negative for backward). Does not clamp.
+
+**Returns:** Reference to `*this` for chaining
+
+Source: `include/zep/glyph_iterator.h:68`
+
+### MoveClamped()
+
+```cpp
+GlyphIterator& MoveClamped(long count, 
+                           LineLocation clamp = LineLocation::LineLastNonCR)
+```
+
+Moves the iterator by `count` code points, clamping to the specified line boundary.
+
+**Parameters:**
+- `count` - Number of code points to move (positive/negative)
+- `clamp` - Line boundary to respect (default: last character before carriage return)
+
+**Returns:** Reference to `*this` for chaining
+
+Source: `include/zep/glyph_iterator.h:67`
+
+### Clamp()
+
+```cpp
+GlyphIterator& Clamp()
+```
+
+Clamps the iterator to valid buffer bounds.
+
+**Returns:** Reference to `*this` for chaining
+
+Source: `include/zep/glyph_iterator.h:69`
+
+## Peek Operations
+
+Peek methods return a new iterator without modifying the current one:
+
+### Peek()
+
+```cpp
+GlyphIterator Peek(long count) const
+```
+
+Returns a new iterator moved by `count` code points without clamping.
+
+Source: `include/zep/glyph_iterator.h:71`
+
+### PeekLineClamped()
+
+```cpp
+GlyphIterator PeekLineClamped(long count, 
+                              LineLocation clamp = LineLocation::LineLastNonCR) const
+```
+
+Returns a new iterator moved by `count` code points, clamped to line boundaries.
+
+Source: `include/zep/glyph_iterator.h:72`
+
+### PeekByteOffset()
+
+```cpp
+GlyphIterator PeekByteOffset(long count) const
+```
+
+Returns a new iterator moved by `count` bytes (not code points). Useful for low-level buffer operations.
+
+Source: `include/zep/glyph_iterator.h:73`
+
+### Clamped()
+
+```cpp
+GlyphIterator Clamped() const
+```
+
+Returns a clamped copy of the iterator.
+
+Source: `include/zep/glyph_iterator.h:74`
+
+## Character Access
+
+### Char()
+
+```cpp
+uint8_t Char() const
+```
+
+Returns the byte at the current position.
+
+Source: `include/zep/glyph_iterator.h:65`
+
+### operator*
+
+```cpp
+uint8_t operator*() const
+```
+
+Dereferences the iterator, returning the byte at the current position.
+
+Source: `include/zep/glyph_iterator.h:66`
+
+## Comparison Operators
+
+```cpp
+bool operator<(const GlyphIterator& rhs) const
+bool operator<=(const GlyphIterator& rhs) const
+bool operator>(const GlyphIterator& rhs) const
+bool operator>=(const GlyphIterator& rhs) const
+bool operator==(const GlyphIterator& rhs) const
+bool operator!=(const GlyphIterator& rhs) const
+```
+
+All standard comparison operators are supported, comparing by byte index.
+
+Source: `include/zep/glyph_iterator.h:50-55`
+
+## Assignment
+
+```cpp
+GlyphIterator& operator=(const GlyphIterator& rhs)
+```
+
+Assigns from another iterator.
+
+Source: `include/zep/glyph_iterator.h:64`
+
+## Helper Structures
+
+### GlyphRange
+
+```cpp
+struct GlyphRange
+{
+    GlyphIterator first;
+    GlyphIterator second;
+    
+    GlyphRange(GlyphIterator a, GlyphIterator b);
+    GlyphRange(const ZepBuffer* buffer, ByteRange range);
+    GlyphRange();
+    
+    bool ContainsLocation(long loc) const;
+    bool ContainsLocation(GlyphIterator loc) const;
+    bool ContainsInclusiveLocation(GlyphIterator loc) const;
+    bool Valid() const;
+    void Invalidate();
+};
+```
+
+Represents a range of text between two iterators.
+
+Source: `include/zep/glyph_iterator.h:98-111`
+
+### ByteRange
+
+```cpp
+struct ByteRange
+{
+    ByteIndex first;
+    ByteIndex second;
+    
+    bool ContainsLocation(ByteIndex loc) const;
+};
+```
+
+Represents a byte-level range in the buffer.
+
+Source: `include/zep/glyph_iterator.h:12-24`
+
+## Distance Functions
+
+### CodePointDistance()
+
+```cpp
+long CodePointDistance(const GlyphIterator& itr1, const GlyphIterator& itr2)
+```
+
+Calculates the number of Unicode code points between two iterators.
+
+**Returns:** Number of code points from `itr1` to `itr2`
+
+Source: `include/zep/glyph_iterator.h:81`
+
+### ByteDistance()
+
+```cpp
+long ByteDistance(const GlyphIterator& itr1, const GlyphIterator& itr2)
+```
+
+Calculates the byte distance between two iterators.
+
+**Returns:** Byte offset difference (itr2.Index() - itr1.Index())
+
+Source: `include/zep/glyph_iterator.h:93`
+
+## LineLocation Enum
+
+```cpp
+enum class LineLocation
+{
+    None,                 // Not any specific location
+    LineFirstGraphChar,   // First non-blank character
+    LineLastGraphChar,    // Last non-blank character  
+    LineLastNonCR,        // Last character before carriage return
+    LineBegin,            // Beginning of line
+    BeyondLineEnd,        // The line end (for wrapped lines)
+    LineCRBegin           // The first carriage return character
+};
+```
+
+Defines special locations within a line for clamping operations.
+
+Source: `include/zep/glyph_iterator.h:26-35`
+
+## Example Usage
+
+```cpp
+// Create an iterator at the beginning of a buffer
+GlyphIterator itr(buffer, 0);
+
+// Move forward by 5 code points
+itr += 5;
+
+// Get character at current position
+uint8_t ch = *itr;
+
+// Peek ahead 3 code points without moving
+GlyphIterator ahead = itr.Peek(3);
+
+// Move to end of line, clamping to last non-CR character
+itr.MoveClamped(1000, LineLocation::LineLastNonCR);
+
+// Check if iterator is valid
+if (itr.Valid()) {
+    // Use iterator
+}
+
+// Calculate distance between two iterators
+GlyphIterator start(buffer, 0);
+GlyphIterator end(buffer, 100);
+long numCodePoints = CodePointDistance(start, end);
+long numBytes = ByteDistance(start, end);
+
+// Create a range
+GlyphRange range(start, end);
+if (range.ContainsLocation(itr)) {
+    // itr is within the range
+}
+```
+
+## Design Notes
+
+- **UTF-8 multi-byte handling**: The iterator automatically handles multi-byte UTF-8 sequences, ensuring movement always lands on valid code point boundaries
+- **Gap buffer integration**: The iterator is aware of the gap buffer's internal structure and transparently skips the gap
+- **Auto-clamping philosophy**: Iterators prefer to remain valid rather than enter error states, automatically clamping when operations would move them out of bounds
+- **Line-aware navigation**: The `LineLocation` enum enables intelligent movement within lines, respecting boundaries like the first visible character or last character before line breaks

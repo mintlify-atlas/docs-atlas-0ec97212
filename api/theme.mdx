@@ -1,0 +1,233 @@
+---
+title: ZepTheme
+description: Color theme system for the editor
+---
+
+## Overview
+
+The `ZepTheme` class manages color schemes for the Zep editor. It provides predefined color values for all UI elements and syntax highlighting, supporting both dark and light themes.
+
+## ZepTheme Class
+
+### Constructor
+
+```cpp
+ZepTheme();
+```
+
+Creates a new theme instance with default dark theme colors.
+
+### Color Management
+
+#### GetColor
+
+```cpp
+const NVec4f& GetColor(ThemeColor themeColor) const;
+```
+
+Retrieves the RGBA color value for a specific theme color.
+
+**Parameters:**
+- `themeColor` - The theme color identifier
+
+**Returns:** RGBA color as `NVec4f` (values 0.0-1.0)
+
+#### SetColor
+
+```cpp
+void SetColor(ThemeColor themeColor, const NVec4f& col);
+```
+
+Sets a custom color value for a theme color.
+
+**Parameters:**
+- `themeColor` - The theme color to modify
+- `col` - RGBA color value (components 0.0-1.0)
+
+#### GetComplement
+
+```cpp
+NVec4f GetComplement(const NVec4f& col, const NVec4f& adjust = NVec4f(0.0f)) const;
+```
+
+Generates a complementary color based on the current theme.
+
+**Parameters:**
+- `col` - Base color
+- `adjust` - Optional adjustment vector
+
+**Returns:** Complementary RGBA color
+
+#### GetUniqueColor
+
+```cpp
+ThemeColor GetUniqueColor(uint32_t id) const;
+```
+
+Returns one of 16 predefined unique colors for differentiating items.
+
+**Parameters:**
+- `id` - Index (0-15) of the unique color to retrieve
+
+**Returns:** A `ThemeColor` enum value (UniqueColor0-UniqueColor15)
+
+### Theme Type
+
+#### SetThemeType
+
+```cpp
+void SetThemeType(ThemeType type);
+```
+
+Switches between dark and light theme.
+
+**Parameters:**
+- `type` - Either `ThemeType::Dark` or `ThemeType::Light`
+
+#### GetThemeType
+
+```cpp
+ThemeType GetThemeType() const;
+```
+
+**Returns:** Current theme type (dark or light)
+
+## ThemeColor Enum
+
+The `ThemeColor` enum defines all available theme colors:
+
+### UI Colors
+
+```cpp
+enum class ThemeColor
+{
+    None,                      // No color / transparent
+    TabBorder,                 // Border around tabs
+    HiddenText,               // Hidden or folded text
+    Text,                     // Default text
+    TextDim,                  // Dimmed text
+    Background,               // Editor background
+    TabInactive,              // Inactive tab background
+    TabActive,                // Active tab background
+    LineNumberBackground,     // Line number gutter background
+    LineNumber,               // Line number text
+    LineNumberActive,         // Active line number
+    CursorNormal,             // Normal mode cursor
+    CursorInsert,             // Insert mode cursor
+    Light,                    // Generic light color
+    Dark,                     // Generic dark color
+    VisualSelectBackground,   // Visual selection background
+    CursorLineBackground,     // Current line highlight
+    AirlineBackground,        // Status line background
+    Mode,                     // Mode indicator
+```
+
+### Syntax Colors
+
+```cpp
+    Normal,                   // Default text color
+    Keyword,                  // Language keywords
+    Identifier,               // Special identifiers
+    Number,                   // Numeric literals
+    String,                   // String literals
+    Comment,                  // Comments
+    Whitespace,               // Whitespace characters
+    HiddenChar,               // Hidden characters
+    Parenthesis,              // Brackets and parentheses
+```
+
+### Diagnostic Colors
+
+```cpp
+    Error,                    // Error markers
+    Warning,                  // Warning markers
+    Info,                     // Info markers
+```
+
+### Widget Colors
+
+```cpp
+    WidgetBorder,             // Widget borders
+    WidgetBackground,         // Widget backgrounds
+    WidgetActive,             // Active widget elements
+    WidgetInactive,           // Inactive widget elements
+    FlashColor,               // Temporary flash animations
+    Custom,                   // Custom user-defined color
+```
+
+### Unique Colors
+
+```cpp
+    UniqueColor0,             // Predefined unique color 0
+    UniqueColor1,             // Predefined unique color 1
+    // ... through ...
+    UniqueColor15,            // Predefined unique color 15
+    UniqueColorLast
+};
+```
+
+Unique colors are pregenerated, easily distinguishable colors useful for syntax highlighting, bracket matching, or differentiating multiple cursors.
+
+## ThemeType Enum
+
+```cpp
+enum class ThemeType
+{
+    Dark,                     // Dark theme
+    Light                     // Light theme
+};
+```
+
+## Creating Custom Themes
+
+### Example: Custom Dark Theme
+
+```cpp
+// Create theme instance
+ZepTheme myTheme;
+myTheme.SetThemeType(ThemeType::Dark);
+
+// Customize colors
+myTheme.SetColor(ThemeColor::Background, NVec4f(0.1f, 0.1f, 0.1f, 1.0f));
+myTheme.SetColor(ThemeColor::Text, NVec4f(0.9f, 0.9f, 0.9f, 1.0f));
+myTheme.SetColor(ThemeColor::Keyword, NVec4f(0.8f, 0.3f, 0.8f, 1.0f));
+myTheme.SetColor(ThemeColor::String, NVec4f(0.3f, 0.8f, 0.3f, 1.0f));
+myTheme.SetColor(ThemeColor::Comment, NVec4f(0.5f, 0.5f, 0.5f, 1.0f));
+
+// Apply to editor
+editor.SetTheme(myTheme);
+```
+
+### Example: Light Theme Variant
+
+```cpp
+ZepTheme lightTheme;
+lightTheme.SetThemeType(ThemeType::Light);
+
+// Light themes typically have light backgrounds and dark text
+lightTheme.SetColor(ThemeColor::Background, NVec4f(0.95f, 0.95f, 0.95f, 1.0f));
+lightTheme.SetColor(ThemeColor::Text, NVec4f(0.1f, 0.1f, 0.1f, 1.0f));
+lightTheme.SetColor(ThemeColor::CursorLineBackground, NVec4f(0.9f, 0.9f, 0.9f, 1.0f));
+```
+
+## Color Format
+
+All colors use the `NVec4f` format with RGBA components:
+
+```cpp
+NVec4f color(red, green, blue, alpha);
+// Each component ranges from 0.0 (minimum) to 1.0 (maximum)
+```
+
+**Examples:**
+```cpp
+NVec4f black(0.0f, 0.0f, 0.0f, 1.0f);      // Opaque black
+NVec4f white(1.0f, 1.0f, 1.0f, 1.0f);      // Opaque white
+NVec4f red(1.0f, 0.0f, 0.0f, 1.0f);        // Opaque red
+NVec4f transparent(0.0f, 0.0f, 0.0f, 0.0f); // Fully transparent
+```
+
+## See Also
+
+- [ZepSyntax](/api/syntax) - Syntax highlighting that uses theme colors
+- [RangeMarker](/api/range-markers) - Range markers that use theme colors

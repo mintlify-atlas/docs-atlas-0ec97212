@@ -1,0 +1,207 @@
+---
+title: ZepSyntax
+description: Syntax highlighting system for text buffers
+---
+
+## Overview
+
+The `ZepSyntax` class provides syntax highlighting functionality for Zep text buffers. It runs asynchronously to analyze buffer text and apply syntax coloring based on keywords, identifiers, comments, and other language constructs.
+
+## ZepSyntax Class
+
+### Constructor
+
+```cpp
+ZepSyntax(ZepBuffer& buffer,
+    const std::unordered_set<std::string>& keywords = {},
+    const std::unordered_set<std::string>& identifiers = {},
+    uint32_t flags = 0);
+```
+
+Creates a new syntax highlighter for the specified buffer.
+
+**Parameters:**
+- `buffer` - The ZepBuffer to apply syntax highlighting to
+- `keywords` - Set of language keywords to highlight
+- `identifiers` - Set of special identifiers to highlight
+- `flags` - Syntax processing flags (see ZepSyntaxFlags)
+
+### Core Methods
+
+#### GetSyntaxAt
+
+```cpp
+virtual SyntaxResult GetSyntaxAt(const GlyphIterator& index) const;
+```
+
+Returns the syntax highlighting information at a specific character position.
+
+**Parameters:**
+- `index` - Position in the buffer to query
+
+**Returns:** `SyntaxResult` containing foreground/background colors and formatting
+
+#### UpdateSyntax
+
+```cpp
+virtual void UpdateSyntax();
+```
+
+Triggers a syntax analysis update. This runs asynchronously in the background.
+
+#### Interrupt
+
+```cpp
+virtual void Interrupt();
+```
+
+Interrupts any ongoing syntax processing.
+
+#### Wait
+
+```cpp
+virtual void Wait() const;
+```
+
+Blocks until syntax processing is complete.
+
+#### GetProcessedChar
+
+```cpp
+virtual long GetProcessedChar() const;
+```
+
+**Returns:** The character position up to which syntax has been processed
+
+### Color Conversion
+
+#### ToBackgroundColor
+
+```cpp
+const NVec4f& ToBackgroundColor(const SyntaxResult& res) const;
+```
+
+Converts a syntax result to a background RGBA color.
+
+#### ToForegroundColor
+
+```cpp
+const NVec4f& ToForegroundColor(const SyntaxResult& res) const;
+```
+
+Converts a syntax result to a foreground RGBA color.
+
+## ZepSyntaxFlags
+
+Flags that control syntax highlighting behavior:
+
+```cpp
+namespace ZepSyntaxFlags
+{
+enum
+{
+    CaseInsensitive = (1 << 0),      // Keywords are case-insensitive
+    IgnoreLineHighlight = (1 << 1),  // Don't highlight the current line
+    LispLike = (1 << 2)              // Use Lisp-like syntax rules
+};
+};
+```
+
+## SyntaxData Structure
+
+```cpp
+struct SyntaxData
+{
+    ThemeColor foreground = ThemeColor::Normal;
+    ThemeColor background = ThemeColor::None;
+    bool underline = false;
+};
+```
+
+Defines the visual styling for a syntax element.
+
+**Fields:**
+- `foreground` - Text color (from theme)
+- `background` - Background color (from theme)
+- `underline` - Whether to underline the text
+
+## SyntaxResult Structure
+
+```cpp
+struct SyntaxResult : SyntaxData
+{
+    NVec4f customBackgroundColor;
+    NVec4f customForegroundColor;
+};
+```
+
+Extends `SyntaxData` with custom RGBA colors that override theme colors when set.
+
+## Implementing Custom Syntax Highlighters
+
+To create a custom syntax highlighter:
+
+1. **Inherit from ZepSyntax:**
+
+```cpp
+class MySyntax : public ZepSyntax
+{
+public:
+    MySyntax(ZepBuffer& buffer)
+        : ZepSyntax(buffer, GetKeywords(), GetIdentifiers())
+    {
+    }
+    
+    static std::unordered_set<std::string> GetKeywords()
+    {
+        return {"if", "else", "while", "for", "return"};
+    }
+    
+    static std::unordered_set<std::string> GetIdentifiers()
+    {
+        return {"MyClass", "MyFunction"};
+    }
+};
+```
+
+2. **Override GetSyntaxAt for custom logic:**
+
+```cpp
+SyntaxResult GetSyntaxAt(const GlyphIterator& index) const override
+{
+    // Call base implementation first
+    auto result = ZepSyntax::GetSyntaxAt(index);
+    
+    // Apply custom coloring logic
+    // ...
+    
+    return result;
+}
+```
+
+3. **Register with buffer:**
+
+```cpp
+auto syntax = std::make_shared<MySyntax>(buffer);
+buffer.SetSyntaxProvider(syntax);
+```
+
+## ZepSyntaxAdorn
+
+Base class for syntax adornments that can overlay additional highlighting:
+
+```cpp
+class ZepSyntaxAdorn : public ZepComponent
+{
+public:
+    ZepSyntaxAdorn(ZepSyntax& syntax, ZepBuffer& buffer);
+    virtual SyntaxResult GetSyntaxAt(const GlyphIterator& offset, bool& found) const = 0;
+};
+```
+
+Adornments allow you to layer additional syntax highlighting effects without modifying the base syntax provider.
+
+## See Also
+
+- [ZepTheme](/api/theme) - Color theme system used by syntax highlighting
+- [ZepBuffer](/api/buffer) - Text buffer that syntax highlighting is applied to

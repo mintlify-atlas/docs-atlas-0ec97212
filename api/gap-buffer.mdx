@@ -1,0 +1,339 @@
+---
+title: GapBuffer
+description: STL-friendly gap buffer template class for efficient text editing
+---
+
+## Overview
+
+The `GapBuffer` is a specialized data structure optimized for efficient text editing operations. It maintains an internal "gap" that can be moved around, making insertions and deletions in localized regions very efficient. This data structure is famously used by editors like Emacs.
+
+Source: `include/zep/gap_buffer.h:52`
+
+## How Gap Buffers Work
+
+A gap buffer appears as contiguous memory to the client, but internally contains a "gap" - an empty space that can be moved around the buffer. When you insert or delete text:
+
+1. The gap is moved to the insertion/deletion point
+2. Insertions consume gap space (shrinking the gap)
+3. Deletions expand the gap
+4. When the gap becomes too small, the buffer is reallocated with a larger gap
+
+This design amortizes the cost of memory operations across many edits in the same region.
+
+**Visual representation:**
+```
+Before gap: "Hello____World" (gap shown as ____)
+After inserting " Beautiful" at position 5:
+"Hello Beautiful____World"
+```
+
+## Template Declaration
+
+```cpp
+template <class T, class A = std::allocator<T>>
+class GapBuffer
+```
+
+**Template Parameters:**
+- `T` - The value type stored in the buffer (typically `char` or `uint8_t` for text)
+- `A` - The allocator type (defaults to `std::allocator<T>`)
+
+## Key Members
+
+### Internal Pointers
+
+```cpp
+T *m_pStart;      // Start of the buffer
+T *m_pEnd;        // Pointer after the end
+T *m_pGapStart;   // Gap start position
+T *m_pGapEnd;     // End of the gap, just beyond
+```
+
+Source: `include/zep/gap_buffer.h:64-67`
+
+### Constants
+
+```cpp
+static const int DEFAULT_GAP = 1000;
+```
+
+The default gap size when creating a new buffer.
+
+Source: `include/zep/gap_buffer.h:55`
+
+## Core Methods
+
+### Size and Capacity
+
+#### size()
+
+```cpp
+size_type size() const
+```
+
+Returns the logical size of the buffer (total size minus gap size).
+
+Source: `include/zep/gap_buffer.h:178`
+
+#### empty()
+
+```cpp
+bool empty() const
+```
+
+Returns `true` if the buffer contains no elements.
+
+Source: `include/zep/gap_buffer.h:184`
+
+### Insertion Operations
+
+#### insert()
+
+```cpp
+template<class iter>
+iterator insert(const_iterator pt, iter srcStart, iter srcEnd)
+```
+
+Inserts a range of elements at the specified position. The gap is automatically moved to the insertion point and resized if necessary.
+
+**Parameters:**
+- `pt` - The position to insert at
+- `srcStart` - Beginning of the source range
+- `srcEnd` - End of the source range
+
+**Returns:** Iterator pointing to the first inserted element
+
+Source: `include/zep/gap_buffer.h:395`
+
+#### push_back()
+
+```cpp
+void push_back(const T& v)
+void push_back(T&& v)
+```
+
+Appends an element to the end of the buffer.
+
+Source: `include/zep/gap_buffer.h:483-494`
+
+#### push_front()
+
+```cpp
+void push_front(const T& v)
+void push_front(T&& v)
+```
+
+Prepends an element to the beginning of the buffer.
+
+Source: `include/zep/gap_buffer.h:467-481`
+
+### Deletion Operations
+
+#### erase()
+
+```cpp
+iterator erase(const_iterator start, const_iterator end)
+iterator erase(const_iterator start)
+```
+
+Erases elements in the specified range or at a single position. The gap is moved to the deletion point and expanded.
+
+**Returns:** Iterator following the last removed element
+
+Source: `include/zep/gap_buffer.h:417-441`
+
+#### pop_back() / pop_front()
+
+```cpp
+void pop_back()
+void pop_front()
+```
+
+Removes the last or first element from the buffer.
+
+Source: `include/zep/gap_buffer.h:497-509`
+
+### Access Operations
+
+#### operator[]
+
+```cpp
+reference operator[](size_type pos)
+const_reference operator[](size_type pos) const
+```
+
+Accesses element at the specified position, skipping the gap automatically.
+
+Source: `include/zep/gap_buffer.h:511-521`
+
+#### at()
+
+```cpp
+reference at(size_type pos)
+const_reference at(size_type pos) const
+```
+
+Accesses element with bounds checking.
+
+Source: `include/zep/gap_buffer.h:523-532`
+
+#### front() / back()
+
+```cpp
+reference front()
+const_reference front() const
+reference back()
+const_reference back() const
+```
+
+Access the first or last element.
+
+Source: `include/zep/gap_buffer.h:443-465`
+
+### Buffer Management
+
+#### clear()
+
+```cpp
+void clear()
+```
+
+Makes an empty buffer with just the gap. The buffer appears empty even though gap space remains allocated.
+
+Source: `include/zep/gap_buffer.h:211`
+
+#### resize()
+
+```cpp
+void resize(size_t newSize)
+```
+
+Resizes the buffer to the specified size. Growing allocates new memory; shrinking expands the gap but doesn't deallocate.
+
+Source: `include/zep/gap_buffer.h:224`
+
+#### assign()
+
+```cpp
+template<class iter>
+void assign(iter srcBegin, iter srcEnd)
+void assign(size_type count, const T& value)
+void assign(std::initializer_list<T> list)
+```
+
+Replaces the entire buffer contents with the specified values.
+
+Source: `include/zep/gap_buffer.h:343`
+
+## Iterators
+
+The `GapBuffer` provides STL-compatible iterators that automatically skip over the gap:
+
+```cpp
+iterator begin()
+const_iterator begin() const
+iterator end()
+const_iterator end() const
+```
+
+Source: `include/zep/gap_buffer.h:167-172`
+
+### Iterator Features
+
+- **Random access**: Full support for `operator+`, `operator-`, comparisons
+- **Gap-aware**: Automatically skips the gap when traversing
+- **Position-based**: Iterator position is measured in logical characters, not buffer offsets
+
+Source: `include/zep/gap_buffer.h:72-117`
+
+## Performance Characteristics
+
+### Time Complexity
+
+| Operation | Complexity | Notes |
+|-----------|------------|-------|
+| Insert at gap | O(1) | Amortized, may trigger gap resize |
+| Insert elsewhere | O(n) | Requires moving the gap |
+| Delete at gap | O(1) | |
+| Delete elsewhere | O(n) | Requires moving the gap |
+| Random access | O(1) | With simple gap check |
+| Sequential access | O(1) per element | Via iterators |
+
+### Space Complexity
+
+- **Memory overhead**: Default gap of 1000 elements
+- **Growth strategy**: Gap grows by `m_defaultGap` when space is needed
+- **Shrinking**: Buffer never shrinks automatically; gap expands instead
+
+### Optimal Use Cases
+
+**Best for:**
+- Text editors where edits are localized (typing at cursor)
+- Sequential insert/delete operations in the same region
+- Scenarios where insertion/deletion is more common than random access
+
+**Less ideal for:**
+- Random insertions/deletions across the entire buffer
+- Very small buffers where gap overhead is significant
+- Applications requiring frequent full-buffer copies
+
+## Search Operations
+
+The gap buffer provides optimized search operations that handle the gap efficiently:
+
+#### find_first_of()
+
+```cpp
+template<class ForwardIt>
+const_iterator find_first_of(const_iterator first, const_iterator last,
+                              ForwardIt s_first, ForwardIt s_last) const
+```
+
+Finds the first occurrence of any character in the search set. Optimized to search on either side of the gap separately.
+
+Source: `include/zep/gap_buffer.h:629`
+
+#### find_first_not_of()
+
+```cpp
+template<class ForwardIt>
+const_iterator find_first_not_of(const_iterator first, const_iterator last,
+                                  ForwardIt s_first, ForwardIt s_last) const
+```
+
+Finds the first character not in the search set.
+
+Source: `include/zep/gap_buffer.h:643`
+
+## Example Usage
+
+```cpp
+// Create a gap buffer for characters
+GapBuffer<char> buffer;
+
+// Initialize with text
+buffer.assign({'H', 'e', 'l', 'l', 'o'});
+
+// Insert at position 5
+std::string world = " World";
+buffer.insert(buffer.begin() + 5, world.begin(), world.end());
+
+// Access elements
+for (size_t i = 0; i < buffer.size(); i++) {
+    std::cout << buffer[i];
+}
+// Outputs: Hello World
+
+// Erase a range
+auto start = buffer.begin() + 5;
+auto end = start + 6;
+buffer.erase(start, end);
+// Now contains: Hello
+```
+
+## Design Notes
+
+- The gap buffer implementation is **copy-disabled** (`delete` copy constructor/assignment)
+- Debug builds fill the gap with `@` characters to aid debugging
+- The buffer uses `memmove` for efficient memory operations
+- Iterators remain valid after operations unless they point to erased elements

@@ -1,0 +1,415 @@
+---
+title: RangeMarker
+description: Visual markers and adornments over text ranges
+---
+
+## Overview
+
+Range markers are visual adornments applied to text ranges in a buffer. They can display underlines, backgrounds, tooltips, indicators, and even embedded widgets. Common uses include error highlighting, search results, inline diagnostics, and custom decorations.
+
+## RangeMarker Class
+
+### Constructor
+
+```cpp
+RangeMarker(ZepBuffer& buffer);
+```
+
+Creates a new range marker for the specified buffer.
+
+**Parameters:**
+- `buffer` - The buffer this marker belongs to
+
+### Range Management
+
+#### SetRange
+
+```cpp
+virtual void SetRange(ByteRange range);
+```
+
+Sets the text range this marker covers.
+
+**Parameters:**
+- `range` - Byte range in the buffer (start and end positions)
+
+#### GetRange
+
+```cpp
+virtual const ByteRange& GetRange() const;
+```
+
+**Returns:** The current byte range covered by this marker
+
+#### ContainsLocation
+
+```cpp
+bool ContainsLocation(GlyphIterator loc) const;
+```
+
+Checks if a specific position falls within this marker's range.
+
+**Parameters:**
+- `loc` - Position to check
+
+**Returns:** `true` if the position is within the marker range
+
+#### IntersectsRange
+
+```cpp
+bool IntersectsRange(const ByteRange& i) const;
+```
+
+Checks if this marker overlaps with another range.
+
+**Parameters:**
+- `i` - Range to check for intersection
+
+**Returns:** `true` if ranges overlap
+
+### Visual Properties
+
+#### SetColors
+
+```cpp
+virtual void SetColors(ThemeColor back = ThemeColor::None,
+                      ThemeColor text = ThemeColor::Text,
+                      ThemeColor highlight = ThemeColor::Text);
+```
+
+Sets all colors at once.
+
+**Parameters:**
+- `back` - Background color
+- `text` - Text color
+- `highlight` - Highlight/underline color
+
+#### SetBackgroundColor
+
+```cpp
+virtual void SetBackgroundColor(ThemeColor color);
+```
+
+Sets the background color for the marked range.
+
+#### SetTextColor
+
+```cpp
+virtual void SetTextColor(ThemeColor color);
+```
+
+Sets the text color for the marked range.
+
+#### SetHighlightColor
+
+```cpp
+virtual void SetHighlightColor(ThemeColor color);
+```
+
+Sets the highlight/underline color.
+
+#### SetAlpha
+
+```cpp
+virtual void SetAlpha(float a);
+```
+
+Sets the opacity of the marker (0.0 = transparent, 1.0 = opaque).
+
+#### GetBackgroundColor
+
+```cpp
+virtual ThemeColor GetBackgroundColor(const GlyphIterator& itr = GlyphIterator()) const;
+```
+
+**Returns:** Background theme color at the specified position
+
+#### GetTextColor
+
+```cpp
+virtual ThemeColor GetTextColor(const GlyphIterator& itr = GlyphIterator()) const;
+```
+
+**Returns:** Text theme color at the specified position
+
+#### GetHighlightColor
+
+```cpp
+virtual ThemeColor GetHighlightColor(const GlyphIterator& itr = GlyphIterator()) const;
+```
+
+**Returns:** Highlight theme color at the specified position
+
+#### GetAlpha
+
+```cpp
+virtual float GetAlpha(const GlyphIterator& itr = GlyphIterator()) const;
+```
+
+**Returns:** Current alpha/opacity value
+
+### Metadata
+
+#### SetName
+
+```cpp
+virtual void SetName(const std::string& name);
+```
+
+Sets the marker name (used for tooltips).
+
+#### GetName
+
+```cpp
+virtual const std::string& GetName() const;
+```
+
+**Returns:** Marker name
+
+#### SetDescription
+
+```cpp
+virtual void SetDescription(const std::string& desc);
+```
+
+Sets a detailed description (used in tooltips).
+
+#### GetDescription
+
+```cpp
+virtual const std::string& GetDescription() const;
+```
+
+**Returns:** Marker description
+
+### State Management
+
+#### SetEnabled
+
+```cpp
+virtual void SetEnabled(bool enabled);
+```
+
+Enables or disables the marker (disabled markers are not rendered).
+
+### Widget Support
+
+#### SetInlineSize
+
+```cpp
+virtual void SetInlineSize(const NVec2f& size);
+```
+
+Sets the size for inline widget markers.
+
+**Parameters:**
+- `size` - Width and height of the inline widget
+
+#### GetInlineSize
+
+```cpp
+virtual const NVec2f& GetInlineSize() const;
+```
+
+**Returns:** Current inline widget size
+
+### Buffer Interaction
+
+#### GetBuffer
+
+```cpp
+ZepBuffer& GetBuffer();
+```
+
+**Returns:** Reference to the associated buffer
+
+## RangeMarkerType
+
+Defines the semantic type of marker:
+
+```cpp
+namespace RangeMarkerType
+{
+enum
+{
+    Mark = (1 << 0),          // General text mark
+    Search = (1 << 1),        // Search result
+    Widget = (1 << 2),        // Inline widget
+    LineWidget = (1 << 3),    // Widget spanning entire line
+    All = (Mark | Search | LineWidget | Widget)
+};
+};
+```
+
+## RangeMarkerDisplayType
+
+Controls how the marker is visually rendered (flags can be combined):
+
+```cpp
+namespace RangeMarkerDisplayType
+{
+enum
+{
+    Hidden = 0,                       // Not displayed
+    Underline = (1 << 0),            // Underline the range
+    Background = (1 << 1),            // Highlight background
+    Tooltip = (1 << 2),              // Show tooltip on hover
+    TooltipAtLine = (1 << 3),        // Tooltip on line hover
+    CursorTip = (1 << 4),            // Tooltip when cursor on marker
+    CursorTipAtLine = (1 << 5),      // Tooltip when cursor on line
+    Indicator = (1 << 6),            // Left-side indicator
+    Timed = (1 << 7),                // Temporary/animated marker
+    All = Underline | Tooltip | TooltipAtLine | CursorTip | CursorTipAtLine | Indicator | Background,
+    CompileError = Tooltip | CursorTip | Indicator | Background,
+    BackgroundMark = Background
+};
+};
+```
+
+## ToolTipPos
+
+Tooltip positioning:
+
+```cpp
+enum class ToolTipPos
+{
+    AboveLine = 0,    // Display tooltip above the line
+    BelowLine = 1,    // Display tooltip below the line
+    RightLine = 2,    // Display tooltip to the right
+    Count = 3
+};
+```
+
+## FlashType
+
+Animation type for timed markers:
+
+```cpp
+enum class FlashType
+{
+    Flash    // Fade in/out animation
+};
+```
+
+## Public Fields
+
+The `RangeMarker` class exposes several public fields for direct access:
+
+```cpp
+uint32_t displayType = RangeMarkerDisplayType::All;  // Display flags
+uint32_t markerType = RangeMarkerType::Mark;         // Marker type
+uint32_t displayRow = 0;                             // Display row for widgets
+ToolTipPos tipPos = ToolTipPos::AboveLine;          // Tooltip position
+std::shared_ptr<IWidget> spWidget;                   // Optional widget
+float duration = 1.0f;                               // Duration for timed markers
+Zep::timer timer;                                     // Timer for animations
+FlashType flashType = FlashType::Flash;              // Animation type
+```
+
+## Usage Examples
+
+### Error Marker
+
+```cpp
+auto marker = std::make_shared<RangeMarker>(buffer);
+marker->SetRange(ByteRange(100, 150));
+marker->SetColors(ThemeColor::Error, ThemeColor::Text, ThemeColor::Error);
+marker->SetName("Syntax Error");
+marker->SetDescription("Expected semicolon at end of statement");
+marker->displayType = RangeMarkerDisplayType::CompileError;
+marker->markerType = RangeMarkerType::Mark;
+
+buffer.AddRangeMarker(marker);
+```
+
+### Search Result Highlight
+
+```cpp
+auto searchMarker = std::make_shared<RangeMarker>(buffer);
+searchMarker->SetRange(ByteRange(200, 210));
+searchMarker->SetBackgroundColor(ThemeColor::VisualSelectBackground);
+searchMarker->displayType = RangeMarkerDisplayType::Background;
+searchMarker->markerType = RangeMarkerType::Search;
+
+buffer.AddRangeMarker(searchMarker);
+```
+
+### Temporary Flash Marker
+
+```cpp
+auto flashMarker = std::make_shared<RangeMarker>(buffer);
+flashMarker->SetRange(ByteRange(50, 100));
+flashMarker->SetBackgroundColor(ThemeColor::FlashColor);
+flashMarker->displayType = RangeMarkerDisplayType::Background | RangeMarkerDisplayType::Timed;
+flashMarker->duration = 0.5f;  // Flash for 0.5 seconds
+flashMarker->flashType = FlashType::Flash;
+
+buffer.AddRangeMarker(flashMarker);
+```
+
+### Warning with Tooltip
+
+```cpp
+auto warningMarker = std::make_shared<RangeMarker>(buffer);
+warningMarker->SetRange(ByteRange(300, 350));
+warningMarker->SetColors(ThemeColor::Warning, ThemeColor::Text, ThemeColor::Warning);
+warningMarker->SetName("Warning");
+warningMarker->SetDescription("Variable 'x' is declared but never used");
+warningMarker->displayType = RangeMarkerDisplayType::Underline | 
+                             RangeMarkerDisplayType::CursorTip |
+                             RangeMarkerDisplayType::Indicator;
+warningMarker->tipPos = ToolTipPos::AboveLine;
+
+buffer.AddRangeMarker(warningMarker);
+```
+
+### Inline Widget
+
+```cpp
+auto widgetMarker = std::make_shared<RangeMarker>(buffer);
+widgetMarker->SetRange(ByteRange(400, 400));  // Zero-width insertion point
+widgetMarker->SetInlineSize(NVec2f(200.0f, 100.0f));
+widgetMarker->spWidget = myCustomWidget;
+widgetMarker->markerType = RangeMarkerType::Widget;
+widgetMarker->displayType = RangeMarkerDisplayType::Hidden;  // Widget handles display
+
+buffer.AddRangeMarker(widgetMarker);
+```
+
+## Managing Markers
+
+### Adding Markers
+
+Markers are typically added through the buffer's API:
+
+```cpp
+buffer.AddRangeMarker(marker);
+```
+
+### Removing Markers
+
+```cpp
+buffer.RemoveRangeMarker(marker);
+```
+
+### Clearing All Markers
+
+```cpp
+buffer.ClearRangeMarkers(RangeMarkerType::All);  // Clear all types
+buffer.ClearRangeMarkers(RangeMarkerType::Search);  // Clear only search markers
+```
+
+## Marker Collections
+
+Markers are stored in a map structure:
+
+```cpp
+using tRangeMarkers = std::map<ByteIndex, std::set<std::shared_ptr<RangeMarker>>>;
+```
+
+Multiple markers can exist at the same position and will be rendered in order.
+
+## See Also
+
+- [ZepTheme](/api/theme) - Theme colors used by markers
+- [ZepBuffer](/api/buffer) - Buffer that contains markers

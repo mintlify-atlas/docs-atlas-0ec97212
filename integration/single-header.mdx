@@ -1,0 +1,267 @@
+---
+title: Single Header Integration
+description: Integrate Zep using a single header file for rapid development
+---
+
+The single-header approach is the fastest way to integrate Zep into your project. Just include one file, define a macro, and you're ready to go.
+
+## Quick Start
+
+Integrating Zep as a single header requires only two steps:
+
+<Steps>
+  <Step title="Add Zep to Your Project">
+    Add Zep as a git submodule or copy the include directory:
+    
+    ```bash Git Submodule
+    git submodule add https://github.com/Rezonality/zep
+    git submodule update --init
+    ```
+  </Step>
+  
+  <Step title="Include and Build">
+    In **one** of your `.cpp` files, define the build macro before including:
+    
+    ```cpp main.cpp
+    #define ZEP_SINGLE_HEADER_BUILD
+    #include "zep/include/zep.h"
+    ```
+    
+    In all other files, just include without the define:
+    
+    ```cpp other_file.cpp
+    #include "zep/include/zep.h"
+    ```
+  </Step>
+</Steps>
+
+## How It Works
+
+The `zep.h` header uses the `ZEP_SINGLE_HEADER_BUILD` macro to determine whether to include implementation:
+
+```cpp include/zep.h
+#ifdef ZEP_SINGLE_HEADER_BUILD
+// Include all implementation files
+#include "../src/buffer.cpp"
+#include "../src/commands.cpp"
+#include "../src/display.cpp"
+#include "../src/editor.cpp"
+// ... and more
+#else
+// Just include headers
+#include "zep/editor.h"
+#include "zep/buffer.h"
+#include "zep/mode_vim.h"
+// ...
+#endif
+```
+
+<Note>
+  Only define `ZEP_SINGLE_HEADER_BUILD` in **one** translation unit. Defining it in multiple files will cause linker errors due to duplicate symbols.
+</Note>
+
+## Minimal Example
+
+Here's a complete minimal example using Zep with ImGui:
+
+```cpp minimal_editor.cpp
+#define ZEP_SINGLE_HEADER_BUILD
+#include "zep/include/zep.h"
+
+#include <imgui.h>
+
+using namespace Zep;
+
+int main()
+{
+    // Initialize your windowing system and ImGui here
+    // ...
+    
+    // Create Zep editor with ImGui display
+    auto pixelScale = NVec2f(1.0f, 1.0f);
+    ZepEditor_ImGui editor("/path/to/config", pixelScale);
+    
+    // Initialize with some text
+    editor.InitWithText("test.cpp", "// Your code here\n");
+    
+    // Main loop
+    while (running)
+    {
+        // ImGui frame setup
+        ImGui::NewFrame();
+        
+        // Render Zep editor
+        ImGui::Begin("Editor");
+        auto min = ImGui::GetCursorScreenPos();
+        auto max = ImGui::GetContentRegionAvail();
+        
+        editor.SetDisplayRegion(
+            NVec2f(min.x, min.y),
+            NVec2f(min.x + max.x, min.y + max.y)
+        );
+        
+        editor.Display();
+        editor.HandleInput();
+        
+        ImGui::End();
+        
+        // Render ImGui
+        ImGui::Render();
+        // Swap buffers, etc.
+    }
+    
+    return 0;
+}
+```
+
+## CMake Configuration
+
+If you're using CMake, here's a minimal configuration:
+
+```cmake CMakeLists.txt
+cmake_minimum_required(VERSION 3.2)
+project(MyZepApp)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Add Zep include directory
+target_include_directories(myapp
+    PRIVATE
+    zep/include
+)
+
+# Your source files
+add_executable(myapp
+    main.cpp
+    # other source files...
+)
+
+# Link with your rendering backend (ImGui, Qt, etc.)
+# target_link_libraries(myapp PRIVATE imgui)
+```
+
+<Note>
+  You don't need to add Zep source files to your CMake target - the single header include handles everything.
+</Note>
+
+## Choosing Your Backend
+
+The `zep.h` header automatically includes the appropriate backend based on preprocessor defines:
+
+### ImGui Backend (Default)
+
+```cpp
+#define ZEP_SINGLE_HEADER_BUILD
+#include "zep/include/zep.h"
+
+// Automatically includes:
+// - zep/imgui/display_imgui.h
+// - zep/imgui/editor_imgui.h
+// - zep/imgui/console_imgui.h
+```
+
+### Qt Backend
+
+```cpp
+#define ZEP_QT
+#define ZEP_SINGLE_HEADER_BUILD
+#include "zep/include/zep.h"
+
+// Automatically includes:
+// - zep/qt/display_qt.h
+// - zep/qt/editor_qt.h
+```
+
+## What Gets Included
+
+When using single-header mode, Zep includes these core components:
+
+- **Editor Core**: Buffer management, cursor, selection
+- **Modes**: Vim mode and Standard mode
+- **Syntax Highlighting**: Basic syntax engine with markdown, rainbow brackets, tree views
+- **UI Components**: Tab windows, splits, scrollers, line widgets
+- **Utilities**: File system support, path handling, string utilities, timers
+- **Display Backend**: ImGui or Qt rendering implementation
+
+## Compilation Time
+
+Single-header builds compile all Zep source in one translation unit, which means:
+
+**Advantages:**
+- No library to build separately
+- No linking step
+- Maximum compiler optimization opportunities
+
+**Disadvantages:**
+- Longer initial compile time (typically 5-30 seconds depending on your system)
+- Every change to the file with `ZEP_SINGLE_HEADER_BUILD` requires full recompilation
+- Higher memory usage during compilation
+
+<Tip>
+  For faster iteration, put the `ZEP_SINGLE_HEADER_BUILD` definition in a separate `.cpp` file that you rarely modify. This way, your main code changes don't trigger Zep recompilation.
+</Tip>
+
+## Full Example Structure
+
+Here's a recommended project structure:
+
+```
+myproject/
+├── CMakeLists.txt
+├── src/
+│   ├── main.cpp              # Your main application
+│   ├── zep_impl.cpp          # ZEP_SINGLE_HEADER_BUILD defined here
+│   └── other_files.cpp
+└── external/
+    └── zep/                  # Git submodule or copy
+        └── include/
+            └── zep.h
+```
+
+**zep_impl.cpp** - Compile once:
+```cpp
+#define ZEP_SINGLE_HEADER_BUILD
+#include "zep/include/zep.h"
+
+// Nothing else needed in this file
+```
+
+**main.cpp** - Your application:
+```cpp
+#include "zep/include/zep.h"  // No define here
+#include <imgui.h>
+
+// Your application code
+```
+
+## Troubleshooting
+
+### Linker Errors: Multiple Definitions
+
+**Problem:** `multiple definition of 'Zep::ZepEditor::...'`
+
+**Solution:** Make sure `ZEP_SINGLE_HEADER_BUILD` is defined in only one `.cpp` file.
+
+### Compilation Errors: Missing Symbols
+
+**Problem:** `undefined reference to 'Zep::ZepEditor::...'`
+
+**Solution:** Ensure you have defined `ZEP_SINGLE_HEADER_BUILD` in at least one `.cpp` file.
+
+### Wrong Backend Included
+
+**Problem:** ImGui code when you want Qt (or vice versa)
+
+**Solution:** Define `ZEP_QT` before including `zep.h` if you want the Qt backend.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="ImGui Integration" icon="gamepad" href="/integration/imgui">
+    Learn how to use Zep with ImGui
+  </Card>
+  <Card title="Qt Integration" icon="window" href="/integration/qt">
+    Learn how to use Zep with Qt
+  </Card>
+</CardGroup>

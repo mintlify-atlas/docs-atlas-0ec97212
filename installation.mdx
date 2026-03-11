@@ -1,0 +1,188 @@
+---
+title: Installation
+description: Install Zep as a single header, CMake library, or vcpkg package
+---
+
+Zep offers multiple installation methods to fit your project's needs. Choose the approach that works best for you.
+
+## Installation Methods
+
+<CardGroup cols={3}>
+  <Card title="Single Header" icon="file-code">
+    Easiest - just include one header file
+  </Card>
+  
+  <Card title="CMake Library" icon="cube">
+    Build and install as a system package
+  </Card>
+  
+  <Card title="Submodule" icon="code-branch">
+    Add as a Git submodule to your project
+  </Card>
+</CardGroup>
+
+## Method 1: Single Header Library
+
+The simplest way to get started. Just add Zep as a submodule and include the header:
+
+<Steps>
+  <Step title="Add as submodule">
+    ```bash
+    git submodule add https://github.com/Rezonality/zep
+    ```
+  </Step>
+  
+  <Step title="Update CMakeLists.txt">
+    Add the include directory to your CMakeLists.txt:
+    
+    ```cmake
+    target_include_directories(myapp
+        PRIVATE
+        zep/include
+    )
+    ```
+  </Step>
+  
+  <Step title="Include in your code">
+    ```cpp
+    #include "zep/zep.h"
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  This method requires no building of Zep - just include the header and you're ready to go!
+</Tip>
+
+## Method 2: CMake Installed Package
+
+Build and install Zep as a system library, then link against it:
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/Rezonality/zep
+    cd zep
+    git submodule update --init
+    ```
+  </Step>
+  
+  <Step title="Run prebuild script">
+    <CodeGroup>
+    ```bash Linux/Mac
+    ./prebuild.sh
+    ```
+    
+    ```bash Windows
+    prebuild.bat
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Build and install">
+    <CodeGroup>
+    ```bash Linux/Mac
+    mkdir build
+    cd build
+    cmake -G "Unix Makefiles" -DBUILD_IMGUI=0 -DBUILD_TESTS=0 -DBUILD_DEMOS=0 ..
+    cmake --build . --target install
+    ```
+    
+    ```bash Windows
+    mkdir build
+    cd build
+    cmake -G "Visual Studio 17 2022" -DBUILD_IMGUI=0 -DBUILD_TESTS=0 -DBUILD_DEMOS=0 ..
+    cmake --build . --target install
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Link in your project">
+    Add to your CMakeLists.txt:
+    
+    ```cmake
+    find_package(Zep REQUIRED)
+    target_link_libraries(MYPROJECT PRIVATE Zep::Zep)
+    ```
+  </Step>
+</Steps>
+
+## Method 3: Direct Source Integration
+
+Copy the source files directly into your project:
+
+<Steps>
+  <Step title="Copy source files">
+    Copy the contents of `src/` and `include/` directories into your project.
+  </Step>
+  
+  <Step title="Add to build system">
+    Add the `.cpp` files to your build system and include paths as needed.
+  </Step>
+</Steps>
+
+## CMake Build Options
+
+When building Zep, you can configure these options:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `BUILD_IMGUI` | OFF | Build ImGui rendering support |
+| `BUILD_QT` | OFF | Build Qt rendering support |
+| `BUILD_DEMOS` | ON | Build demo applications |
+| `BUILD_TESTS` | ON | Build unit tests |
+| `ZEP_FEATURE_CPP_FILE_SYSTEM` | ON | Enable C++ filesystem support |
+
+<Info>
+  For embedding in your application, set `BUILD_IMGUI=0`, `BUILD_TESTS=0`, and `BUILD_DEMOS=0` to build only the core library.
+</Info>
+
+## Platform-Specific Notes
+
+### Linux
+
+Install required packages:
+```bash
+sudo apt install cmake git
+```
+
+### macOS
+
+Install via Homebrew:
+```bash
+brew install cmake git
+```
+
+### Windows
+
+Ensure you have:
+- Visual Studio 2017 or later
+- CMake 3.2 or later
+- Git for Windows
+
+<Warning>
+  On Windows, if building demos with Qt, set the `QT_INSTALL_LOCATION` environment variable:
+  ```bash
+  set QT_INSTALL_LOCATION=C:\Qt\5.10.0\msvc2017_64
+  ```
+</Warning>
+
+## Verifying Installation
+
+To verify your installation, try building a simple test:
+
+```cpp
+#include "zep/editor.h"
+#include <iostream>
+
+int main() {
+    std::cout << "Zep installed successfully!" << std::endl;
+    return 0;
+}
+```
+
+## Next Steps
+
+<Card title="Quick Start Guide" icon="rocket" href="/quickstart">
+  Learn how to create your first Zep editor with a minimal ImGui example
+</Card>

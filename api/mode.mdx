@@ -1,0 +1,335 @@
+---
+title: "ZepMode"
+description: "Base class for all editor input modes in Zep"
+---
+
+## Overview
+
+`ZepMode` is the abstract base class for all editor modes in Zep. It defines the core interface for handling keyboard input, managing editor state, and controlling cursor behavior. All specific mode implementations (Vim, Standard, REPL, Search) inherit from this class.
+
+## Class Definition
+
+```cpp
+class ZepMode : public ZepComponent
+```
+
+### Constructor
+
+```cpp
+ZepMode(ZepEditor& editor)
+```
+
+Creates a new mode instance associated with the given editor.
+
+<ParamField path="editor" type="ZepEditor&" required>
+  Reference to the parent ZepEditor instance
+</ParamField>
+
+## Core Methods
+
+### Init
+
+```cpp
+virtual void Init()
+```
+
+Initializes the mode. Override this to set up key mappings and mode-specific configuration.
+
+### Begin
+
+```cpp
+virtual void Begin(ZepWindow* pWindow)
+```
+
+Called when the mode becomes active for a window.
+
+<ParamField path="pWindow" type="ZepWindow*" required>
+  The window where the mode is being activated
+</ParamField>
+
+### AddKeyPress
+
+```cpp
+virtual void AddKeyPress(uint32_t key, uint32_t modifierKeys = ModifierKey::None)
+```
+
+Processes a key press event. This is the main entry point for keyboard input.
+
+<ParamField path="key" type="uint32_t" required>
+  The key code (ASCII or ExtKeys enum value)
+</ParamField>
+
+<ParamField path="modifierKeys" type="uint32_t" default="ModifierKey::None">
+  Bitfield of modifier keys (Ctrl, Alt, Shift)
+</ParamField>
+
+### GetEditorMode
+
+```cpp
+virtual EditorMode GetEditorMode() const
+```
+
+Returns the current editor mode (Normal, Insert, Visual, Ex).
+
+**Returns:** Current `EditorMode` enum value
+
+### DefaultMode
+
+```cpp
+virtual EditorMode DefaultMode() const = 0
+```
+
+Pure virtual method that returns the default editor mode for this mode implementation.
+
+**Returns:** The default `EditorMode` for this mode
+
+### Name
+
+```cpp
+virtual const char* Name() const = 0
+```
+
+Pure virtual method that returns the name of the mode.
+
+**Returns:** C-string containing the mode name
+
+## Mode Control
+
+### SwitchMode
+
+```cpp
+virtual void SwitchMode(EditorMode currentMode)
+```
+
+Switches to a different editor mode (e.g., from Normal to Insert).
+
+<ParamField path="currentMode" type="EditorMode" required>
+  The mode to switch to
+</ParamField>
+
+### GetCursorType
+
+```cpp
+virtual CursorType GetCursorType() const
+```
+
+Returns the cursor type appropriate for the current mode.
+
+**Returns:** `CursorType` enum value
+
+### UsesRelativeLines
+
+```cpp
+virtual bool UsesRelativeLines() const
+```
+
+Indicates whether this mode uses relative line numbering.
+
+**Returns:** `true` if relative line numbering is used, `false` otherwise
+
+## Command Handling
+
+### AddCommandText
+
+```cpp
+virtual void AddCommandText(std::string strText)
+```
+
+Adds command text to the current command buffer.
+
+<ParamField path="strText" type="std::string" required>
+  The command text to add
+</ParamField>
+
+### AddCommand
+
+```cpp
+virtual void AddCommand(std::shared_ptr<ZepCommand> spCmd)
+```
+
+Executes a command object.
+
+<ParamField path="spCmd" type="std::shared_ptr<ZepCommand>" required>
+  Shared pointer to the command to execute
+</ParamField>
+
+### Undo
+
+```cpp
+virtual void Undo()
+```
+
+Undoes the last command.
+
+### Redo
+
+```cpp
+virtual void Redo()
+```
+
+Redoes the previously undone command.
+
+## Display Methods
+
+### PreDisplay
+
+```cpp
+virtual void PreDisplay(ZepWindow& win)
+```
+
+Called before displaying a window. Override to perform mode-specific display preparation.
+
+<ParamField path="win" type="ZepWindow&" required>
+  The window about to be displayed
+</ParamField>
+
+### GetAirlines
+
+```cpp
+virtual std::vector<Airline> GetAirlines(ZepWindow&) const
+```
+
+Returns status line information for display.
+
+**Returns:** Vector of `Airline` structures containing status information
+
+### ModifyWindowFlags
+
+```cpp
+virtual uint32_t ModifyWindowFlags(uint32_t windowFlags)
+```
+
+Allows the mode to modify window display flags.
+
+<ParamField path="windowFlags" type="uint32_t" required>
+  Current window flags
+</ParamField>
+
+**Returns:** Modified window flags
+
+## Enums
+
+### EditorMode
+
+Defines the different editing modes available:
+
+```cpp
+enum class EditorMode
+{
+    None,
+    Normal,   // Normal/command mode (Vim)
+    Insert,   // Insert/editing mode
+    Visual,   // Visual selection mode (Vim)
+    Ex        // Ex command mode (Vim)
+}
+```
+
+<Note>
+  The `Ex` mode is used for entering colon commands in Vim mode (e.g., `:w`, `:q`).
+</Note>
+
+### ExtKeys
+
+Defines non-ASCII key codes for special keys:
+
+```cpp
+enum Key
+{
+    RETURN = 0,
+    ESCAPE = 1,
+    BACKSPACE = 2,
+    LEFT = 3,
+    RIGHT = 4,
+    UP = 5,
+    DOWN = 6,
+    TAB = 7,
+    DEL = 8,
+    HOME = 9,
+    END = 10,
+    PAGEDOWN = 11,
+    PAGEUP = 12,
+    F1 = 13,
+    // ... F2-F12 ...
+    F12 = 24
+}
+```
+
+<Info>
+  ExtKeys values are mapped below ASCII space (32) to avoid conflicts with printable characters.
+</Info>
+
+### ModifierKey
+
+Defines keyboard modifier keys as bitflags:
+
+```cpp
+enum Key
+{
+    None = 0,
+    Ctrl = (1 << 0),
+    Alt = (1 << 1),
+    Shift = (1 << 2)
+}
+```
+
+### CommandOperation
+
+Defines the types of operations that can be performed:
+
+```cpp
+enum class CommandOperation
+{
+    None,
+    Delete,
+    DeleteLines,
+    Insert,
+    Copy,
+    CopyLines,
+    Replace,
+    Paste
+}
+```
+
+## Usage Example
+
+```cpp
+// Custom mode implementation
+class MyCustomMode : public ZepMode
+{
+public:
+    MyCustomMode(ZepEditor& editor) : ZepMode(editor) {}
+    
+    virtual void Init() override
+    {
+        // Set up custom key mappings
+    }
+    
+    virtual const char* Name() const override
+    {
+        return "MyMode";
+    }
+    
+    virtual EditorMode DefaultMode() const override
+    {
+        return EditorMode::Normal;
+    }
+    
+    virtual void AddKeyPress(uint32_t key, uint32_t modifiers) override
+    {
+        // Handle custom key bindings
+        ZepMode::AddKeyPress(key, modifiers);
+    }
+};
+
+// Create and use the mode
+auto mode = std::make_shared<MyCustomMode>(editor);
+mode->Init();
+mode->Begin(window);
+```
+
+## See Also
+
+- [ZepMode_Vim](/api/mode-vim) - Vim-style modal editing
+- [ZepMode_Standard](/api/mode-standard) - Standard editor mode
+- [ZepMode_Search](/api/mode-search) - File search mode
+- [ZepMode_REPL](/api/mode-repl) - REPL interaction mode

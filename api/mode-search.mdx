@@ -1,0 +1,400 @@
+---
+title: "ZepMode_Search"
+description: "File search and fuzzy finding mode"
+---
+
+## Overview
+
+`ZepMode_Search` provides fast file searching and navigation capabilities within a project directory. It offers fuzzy matching and real-time search results, similar to tools like Ctrl+P in VS Code or telescope.nvim in Neovim.
+
+## Class Definition
+
+```cpp
+class ZepMode_Search : public ZepMode
+```
+
+Inherits from [ZepMode](/api/mode) and implements interactive file search.
+
+### Constructor
+
+```cpp
+ZepMode_Search(
+    ZepEditor& editor,
+    ZepWindow& previousWindow,
+    ZepWindow& window,
+    const fs::path& startPath
+)
+```
+
+<ParamField path="editor" type="ZepEditor&" required>
+  Reference to the parent ZepEditor instance
+</ParamField>
+
+<ParamField path="previousWindow" type="ZepWindow&" required>
+  The window that was active before entering search mode
+</ParamField>
+
+<ParamField path="window" type="ZepWindow&" required>
+  The window to display search results in
+</ParamField>
+
+<ParamField path="startPath" type="const fs::path&" required>
+  Root directory to start the file search from
+</ParamField>
+
+## Core Methods
+
+### AddKeyPress
+
+```cpp
+virtual void AddKeyPress(uint32_t key, uint32_t modifiers = 0) override
+```
+
+Handles keyboard input for search queries and result navigation.
+
+<ParamField path="key" type="uint32_t" required>
+  The key code
+</ParamField>
+
+<ParamField path="modifiers" type="uint32_t" default="0">
+  Modifier keys (Ctrl, Alt, Shift)
+</ParamField>
+
+<Note>
+  As you type, the search results update in real-time with fuzzy matching.
+</Note>
+
+### Begin
+
+```cpp
+virtual void Begin(ZepWindow* pWindow) override
+```
+
+Activates search mode and begins indexing files.
+
+<ParamField path="pWindow" type="ZepWindow*" required>
+  The window to activate search mode in
+</ParamField>
+
+### Name
+
+```cpp
+virtual const char* Name() const override
+static const char* StaticName()
+```
+
+Returns the mode name "Search".
+
+**Returns:** `"Search"`
+
+### DefaultMode
+
+```cpp
+virtual EditorMode DefaultMode() const override
+```
+
+Returns the default editor mode for Search (Normal mode).
+
+**Returns:** `EditorMode::Normal`
+
+### GetCursorType
+
+```cpp
+virtual CursorType GetCursorType() const override
+```
+
+Returns the cursor type for search mode.
+
+**Returns:** Appropriate `CursorType` for search input
+
+### Notify
+
+```cpp
+virtual void Notify(std::shared_ptr<ZepMessage> message) override
+```
+
+Handles system messages and notifications.
+
+<ParamField path="message" type="std::shared_ptr<ZepMessage>" required>
+  The message to process
+</ParamField>
+
+## Search Result Structure
+
+### SearchResult
+
+```cpp
+struct SearchResult
+{
+    uint32_t index;     // Index in the file list
+    uint32_t location;  // Character position of last match
+}
+```
+
+Represents a single search result with its location in the file list.
+
+### IndexSet
+
+```cpp
+struct IndexSet
+{
+    std::multimap<uint32_t, SearchResult> indices;
+}
+```
+
+Maps search scores to results, ordered by relevance.
+
+## Opening Files
+
+### OpenType
+
+```cpp
+enum class OpenType
+{
+    Replace,  // Replace current window content
+    VSplit,   // Open in vertical split
+    HSplit,   // Open in horizontal split
+    Tab       // Open in new tab
+}
+```
+
+Defines how to open selected files.
+
+<Info>
+  Different key combinations in search mode can open files in different ways (e.g., Enter for replace, Ctrl+V for vsplit).
+</Info>
+
+## Search Algorithm
+
+The search mode uses a hierarchical fuzzy matching algorithm:
+
+1. **File Indexing**: Asynchronously indexes all files in the directory
+2. **Incremental Search**: Builds a search tree as you type
+3. **Fuzzy Matching**: Matches characters in sequence, not necessarily adjacent
+4. **Scoring**: Ranks results by match quality
+5. **Real-time Update**: Updates results on every keystroke
+
+## Usage Example
+
+### Basic Search Setup
+
+```cpp
+#include <zep/mode_search.h>
+#include <zep/editor.h>
+#include <zep/window.h>
+
+// Create editor and window
+auto editor = std::make_unique<ZepEditor>(display);
+auto mainWindow = editor->GetActiveWindow();
+
+// Create a dedicated search window
+auto searchWindow = editor->AddWindow();
+searchWindow->SetWindowFlags(WindowFlags::Modal);
+
+// Initialize search mode
+fs::path projectRoot = "/home/user/myproject";
+auto searchMode = std::make_shared<ZepMode_Search>(
+    *editor,
+    *mainWindow,      // Return to this window after selection
+    *searchWindow,    // Display results here
+    projectRoot       // Search in this directory
+);
+
+// Activate search mode
+searchMode->Begin(searchWindow);
+
+// User types search query
+searchMode->AddKeyPress('m');  // m
+searchMode->AddKeyPress('a');  // ma
+searchMode->AddKeyPress('i');  // mai
+// Results update: main.cpp, main.h, email.cpp, etc.
+
+// Navigate results with arrow keys
+searchMode->AddKeyPress(ExtKeys::DOWN);
+searchMode->AddKeyPress(ExtKeys::DOWN);
+
+// Open selected file with Enter
+searchMode->AddKeyPress(ExtKeys::RETURN);
+// File opens in mainWindow, search mode exits
+```
+
+### Opening Files in Different Ways
+
+```cpp
+// Open in vertical split: Ctrl+V
+searchMode->AddKeyPress('v', ModifierKey::Ctrl);
+
+// Open in horizontal split: Ctrl+H
+searchMode->AddKeyPress('h', ModifierKey::Ctrl);
+
+// Open in new tab: Ctrl+T
+searchMode->AddKeyPress('t', ModifierKey::Ctrl);
+```
+
+### Custom Search Configuration
+
+```cpp
+class MySearchMode : public ZepMode_Search
+{
+public:
+    MySearchMode(
+        ZepEditor& editor,
+        ZepWindow& prevWin,
+        ZepWindow& win,
+        const fs::path& path
+    ) : ZepMode_Search(editor, prevWin, win, path)
+    {
+        // Configure search
+        ConfigureIgnorePatterns();
+    }
+    
+private:
+    void ConfigureIgnorePatterns()
+    {
+        // Customize which files to ignore
+        m_ignorePatterns = {
+            "*.o",
+            "*.obj",
+            ".git/*",
+            "build/*",
+            "node_modules/*",
+            ".DS_Store"
+        };
+    }
+    
+    std::vector<std::string> m_ignorePatterns;
+};
+```
+
+### Integration Example
+
+```cpp
+class ProjectNavigator
+{
+public:
+    ProjectNavigator(ZepEditor& editor, const fs::path& projectRoot)
+        : m_editor(editor)
+        , m_projectRoot(projectRoot)
+    {
+    }
+    
+    void ActivateSearch()
+    {
+        // Get current window
+        auto currentWindow = m_editor.GetActiveWindow();
+        
+        // Create modal search window
+        auto searchWindow = CreateSearchWindow();
+        
+        // Create and activate search mode
+        m_searchMode = std::make_shared<ZepMode_Search>(
+            m_editor,
+            *currentWindow,
+            *searchWindow,
+            m_projectRoot
+        );
+        
+        m_searchMode->Begin(searchWindow);
+        
+        // Store previous mode to restore later
+        m_previousMode = m_editor.GetCurrentMode();
+    }
+    
+    void CancelSearch()
+    {
+        // Restore previous mode
+        if (m_previousMode) {
+            m_editor.SetMode(m_previousMode->Name());
+        }
+    }
+    
+private:
+    ZepWindow* CreateSearchWindow()
+    {
+        // Create a centered, modal window for search
+        auto window = m_editor.AddWindow();
+        
+        // Position at screen center
+        NVec2f screenSize = m_editor.GetDisplay().GetScreenSize();
+        NVec2f windowSize(screenSize.x * 0.6f, screenSize.y * 0.4f);
+        NVec2f windowPos(
+            (screenSize.x - windowSize.x) / 2,
+            (screenSize.y - windowSize.y) / 2
+        );
+        
+        window->SetWindowRect(NRectf(windowPos, windowSize));
+        window->SetWindowFlags(WindowFlags::Modal | WindowFlags::Floating);
+        
+        return window;
+    }
+    
+    ZepEditor& m_editor;
+    fs::path m_projectRoot;
+    std::shared_ptr<ZepMode_Search> m_searchMode;
+    std::shared_ptr<ZepMode> m_previousMode;
+};
+
+// Usage
+ProjectNavigator navigator(editor, "/home/user/project");
+
+// Bind to Ctrl+P
+if (key == 'p' && modifiers & ModifierKey::Ctrl) {
+    navigator.ActivateSearch();
+}
+
+// Bind Escape to cancel
+if (key == ExtKeys::ESCAPE && editor.GetCurrentMode()->Name() == "Search") {
+    navigator.CancelSearch();
+}
+```
+
+## Search Features
+
+### Fuzzy Matching
+
+Search supports fuzzy matching where characters don't need to be adjacent:
+
+- Query: `mah` matches:
+  - `main.h` (exact character sequence)
+  - `my_app_header.h` (characters present in order)
+  - `manager.h` (characters present)
+
+### Case Sensitivity
+
+Search can be configured for case-sensitive or case-insensitive matching:
+
+```cpp
+// Case-insensitive by default
+m_caseImportant = false;
+
+// Enable case-sensitive search
+m_caseImportant = true;
+```
+
+### Asynchronous Indexing
+
+File indexing happens asynchronously using `std::future`:
+
+```cpp
+// Indexing doesn't block the UI
+std::future<std::shared_ptr<FileIndexResult>> m_indexResult;
+std::future<std::shared_ptr<IndexSet>> m_searchResult;
+```
+
+<Info>
+  Large projects with thousands of files remain responsive during indexing thanks to asynchronous processing.
+</Info>
+
+## Performance Considerations
+
+- **Initial Indexing**: First search in a directory indexes all files
+- **Incremental Updates**: Subsequent searches reuse the index
+- **Result Limiting**: Only top N results are displayed for performance
+- **Thread Safety**: Indexing runs on background threads
+
+## See Also
+
+- [ZepMode](/api/mode) - Base mode class
+- [ZepWindow](/api/window) - Window management
+- [ZepEditor](/api/editor) - Editor management
+- [ZepBuffer](/api/buffer) - Buffer operations

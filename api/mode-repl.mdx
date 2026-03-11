@@ -1,0 +1,379 @@
+---
+title: "REPL Mode"
+description: "Interactive REPL (Read-Eval-Print Loop) mode for evaluating code"
+---
+
+## Overview
+
+The REPL mode provides interactive code evaluation capabilities within the Zep editor. It allows users to evaluate expressions, sub-expressions, and entire buffers in supported programming languages through a pluggable provider interface.
+
+<Note>
+  REPL mode requires implementing the `IZepReplProvider` interface for your specific language or environment.
+</Note>
+
+## REPL Provider Interface
+
+### IZepReplProvider
+
+```cpp
+struct IZepReplProvider
+```
+
+Interface for implementing language-specific REPL functionality.
+
+#### ReplParse (Buffer-based)
+
+```cpp
+virtual std::string ReplParse(
+    ZepBuffer& text,
+    const GlyphIterator& cursorOffset,
+    ReplParseType type
+)
+```
+
+Parses and evaluates code from a buffer.
+
+<ParamField path="text" type="ZepBuffer&" required>
+  The buffer containing the code to evaluate
+</ParamField>
+
+<ParamField path="cursorOffset" type="const GlyphIterator&" required>
+  Current cursor position in the buffer
+</ParamField>
+
+<ParamField path="type" type="ReplParseType" required>
+  Type of parsing to perform (SubExpression, OuterExpression, Line, All)
+</ParamField>
+
+**Returns:** String containing the evaluation result
+
+#### ReplParse (String-based)
+
+```cpp
+virtual std::string ReplParse(const std::string& text)
+```
+
+Parses and evaluates a code string.
+
+<ParamField path="text" type="const std::string&" required>
+  The code string to evaluate
+</ParamField>
+
+**Returns:** String containing the evaluation result
+
+#### ReplIsFormComplete
+
+```cpp
+virtual bool ReplIsFormComplete(const std::string& input, int& depth)
+```
+
+Checks if the input represents a complete expression.
+
+<ParamField path="input" type="const std::string&" required>
+  The input string to check
+</ParamField>
+
+<ParamField path="depth" type="int&" required>
+  Output parameter for nesting depth (e.g., unclosed parentheses count)
+</ParamField>
+
+**Returns:** `true` if the expression is complete, `false` if more input is needed
+
+<Info>
+  This method is useful for multi-line input, determining when to evaluate versus waiting for more input.
+</Info>
+
+## Parse Types
+
+```cpp
+enum class ReplParseType
+{
+    SubExpression,    // Evaluate the innermost expression at cursor
+    OuterExpression,  // Evaluate the outermost expression containing cursor
+    Line,             // Evaluate the current line
+    All               // Evaluate the entire buffer
+}
+```
+
+## REPL Commands
+
+The REPL system provides several Ex commands for evaluation:
+
+### ZepReplExCommand
+
+```cpp
+class ZepReplExCommand : public ZepExCommand
+```
+
+Main REPL command that opens an interactive REPL window.
+
+#### Constructor
+
+```cpp
+ZepReplExCommand(ZepEditor& editor, IZepReplProvider* pProvider)
+```
+
+<ParamField path="editor" type="ZepEditor&" required>
+  Reference to the editor instance
+</ParamField>
+
+<ParamField path="pProvider" type="IZepReplProvider*" required>
+  Pointer to the REPL provider implementation
+</ParamField>
+
+#### Register
+
+```cpp
+static void Register(ZepEditor& editor, IZepReplProvider* pProvider)
+```
+
+Registers the REPL command with the editor.
+
+#### ExCommandName
+
+```cpp
+virtual const char* ExCommandName() const override
+```
+
+**Returns:** `"ZRepl"` - Use `:ZRepl` in Ex mode to open the REPL
+
+### ZepReplEvaluateCommand
+
+```cpp
+class ZepReplEvaluateCommand : public ZepExCommand
+```
+
+Evaluates the current line or selection.
+
+**Ex Command:** `:ZReplEval`
+
+### ZepReplEvaluateInnerCommand
+
+```cpp
+class ZepReplEvaluateInnerCommand : public ZepExCommand
+```
+
+Evaluates the innermost expression at the cursor position.
+
+**Ex Command:** `:ZReplEvalInner`
+
+### ZepReplEvaluateOuterCommand
+
+```cpp
+class ZepReplEvaluateOuterCommand : public ZepExCommand
+```
+
+Evaluates the outermost expression containing the cursor.
+
+**Ex Command:** `:ZReplEvalOuter`
+
+## Usage Example
+
+### Implementing a Python REPL Provider
+
+```cpp
+#include <zep/mode_repl.h>
+#include <Python.h>
+
+class PythonReplProvider : public IZepReplProvider
+{
+public:
+    std::string ReplParse(const std::string& code) override
+    {
+        // Initialize Python if needed
+        if (!Py_IsInitialized()) {
+            Py_Initialize();
+        }
+        
+        // Evaluate Python code
+        PyObject* result = PyRun_String(
+            code.c_str(),
+            Py_eval_input,
+            m_globals,
+            m_locals
+        );
+        
+        if (result) {
+            PyObject* str = PyObject_Str(result);
+            const char* cstr = PyUnicode_AsUTF8(str);
+            std::string output(cstr);
+            Py_DECREF(str);
+            Py_DECREF(result);
+            return output;
+        }
+        
+        // Handle errors
+        PyErr_Print();
+        return "Error evaluating expression";
+    }
+    
+    std::string ReplParse(
+        ZepBuffer& buffer,
+        const GlyphIterator& cursor,
+        ReplParseType type
+    ) override
+    {
+        // Extract relevant code based on type
+        std::string code;
+        
+        switch (type) {
+            case ReplParseType::Line:
+                code = GetLineAtCursor(buffer, cursor);
+                break;
+            case ReplParseType::All:
+                code = buffer.GetText();
+                break;
+            // Handle other types...
+        }
+        
+        return ReplParse(code);
+    }
+    
+    bool ReplIsFormComplete(const std::string& input, int& depth) override
+    {
+        depth = 0;
+        // Count open brackets/parens
+        for (char c : input) {
+            if (c == '(' || c == '[' || c == '{') depth++;
+            if (c == ')' || c == ']' || c == '}') depth--;
+        }
+        return depth == 0;
+    }
+    
+private:
+    PyObject* m_globals = PyDict_New();
+    PyObject* m_locals = PyDict_New();
+    
+    std::string GetLineAtCursor(ZepBuffer& buffer, const GlyphIterator& cursor)
+    {
+        // Implementation to extract line
+        return "";
+    }
+};
+```
+
+### Registering and Using the REPL
+
+```cpp
+#include <zep/editor.h>
+#include <zep/mode_repl.h>
+
+int main()
+{
+    // Create editor
+    auto editor = std::make_unique<ZepEditor>(display);
+    
+    // Create REPL provider
+    auto pythonRepl = std::make_unique<PythonReplProvider>();
+    
+    // Register REPL commands
+    ZepReplExCommand::Register(*editor, pythonRepl.get());
+    ZepReplEvaluateCommand::Register(*editor, pythonRepl.get());
+    ZepReplEvaluateInnerCommand::Register(*editor, pythonRepl.get());
+    ZepReplEvaluateOuterCommand::Register(*editor, pythonRepl.get());
+    
+    // Now users can use REPL commands:
+    // :ZRepl              - Open interactive REPL
+    // :ZReplEval          - Evaluate current line
+    // :ZReplEvalInner     - Evaluate inner expression
+    // :ZReplEvalOuter     - Evaluate outer expression
+    
+    return 0;
+}
+```
+
+### Interactive REPL Session
+
+```python
+# In the editor, type Python code:
+x = 10
+y = 20
+
+# Execute :ZReplEval to evaluate
+# Result appears in REPL buffer:
+# >>> x = 10
+# >>> y = 20
+
+# Evaluate expressions:
+x + y
+# Execute :ZReplEval
+# >>> x + y
+# 30
+
+# Or open full REPL with :ZRepl
+# >>> _
+```
+
+## Lisp/Scheme Example
+
+```cpp
+class SchemeReplProvider : public IZepReplProvider
+{
+public:
+    std::string ReplParse(const std::string& code) override
+    {
+        // Integrate with Scheme interpreter
+        return m_interpreter.Eval(code);
+    }
+    
+    bool ReplIsFormComplete(const std::string& input, int& depth) override
+    {
+        depth = 0;
+        bool inString = false;
+        
+        for (size_t i = 0; i < input.length(); i++) {
+            char c = input[i];
+            
+            // Handle string literals
+            if (c == '"' && (i == 0 || input[i-1] != '\\')) {
+                inString = !inString;
+                continue;
+            }
+            
+            if (!inString) {
+                if (c == '(') depth++;
+                if (c == ')') depth--;
+            }
+        }
+        
+        // Complete if all parens are balanced
+        return depth == 0 && !inString;
+    }
+    
+private:
+    SchemeInterpreter m_interpreter;
+};
+```
+
+## Key Bindings Example
+
+```cpp
+// Add custom key bindings for REPL evaluation
+void SetupReplKeyBindings(ZepMode& mode)
+{
+    // Ctrl+Enter to evaluate current line
+    mode.GetKeyMap(EditorMode::Insert).AddKeyMap(
+        ExtKeys::RETURN,
+        ModifierKey::Ctrl,
+        StringId("ZReplEval")
+    );
+    
+    // Ctrl+Shift+Enter to evaluate outer expression
+    mode.GetKeyMap(EditorMode::Insert).AddKeyMap(
+        ExtKeys::RETURN,
+        ModifierKey::Ctrl | ModifierKey::Shift,
+        StringId("ZReplEvalOuter")
+    );
+}
+```
+
+<Info>
+  The REPL system is designed for live coding environments where immediate feedback is valuable, such as game development, data analysis, or interactive programming tutorials.
+</Info>
+
+## See Also
+
+- [ZepMode](/api/mode) - Base mode class
+- [ZepCommand](/api/commands) - Command system
+- [ZepBuffer](/api/buffer) - Buffer operations
+- [ZepWindow](/api/window) - Window management

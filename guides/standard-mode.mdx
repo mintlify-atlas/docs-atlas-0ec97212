@@ -1,0 +1,175 @@
+---
+title: Standard Mode
+description: Familiar notepad-style editing with standard keyboard shortcuts for copy, paste, and selection
+---
+
+Zep's Standard Mode (`ZepMode_Standard`) provides a familiar editing experience similar to notepad or common text editors. This mode uses conventional keyboard shortcuts that work across most desktop applications.
+
+<Note>
+  Standard mode is designed to feel like a typical text editor. It always stays in insert mode and uses standard shortcuts for clipboard operations.
+</Note>
+
+## Overview
+
+Standard mode features:
+- Always in insert mode (no mode switching)
+- Standard clipboard shortcuts (Ctrl+C, Ctrl+V, Ctrl+X)
+- Shift-based text selection
+- Familiar undo/redo (Ctrl+Z, Ctrl+Y)
+- Insert cursor type by default
+- Undo operations grouped by continuous typing
+
+## Basic Editing
+
+<Accordion title="Text Input">
+
+### Insertion and Deletion
+- Type to insert text at cursor
+- `<Backspace>` - Delete character before cursor
+- `<Del>` - Delete character under cursor or selected text
+- `<Return>` - Insert newline
+- `<Tab>` - Insert tab character
+
+</Accordion>
+
+## Navigation
+
+<Accordion title="Arrow Keys">
+
+### Basic Movement
+- `<Left>` - Move left one character
+- `<Right>` - Move right one character
+- `<Up>` - Move up one line
+- `<Down>` - Move down one line
+
+### Word Movement
+- `<Ctrl-Left>` - Move left one word
+- `<Ctrl-Right>` - Move right one word
+
+</Accordion>
+
+<Accordion title="Line Navigation">
+
+### Line Boundaries
+- `<Home>` - Move to start of line (toggles between column 0 and first non-whitespace)
+- `<End>` - Move to end of line (beyond last character)
+
+### Page Navigation
+- `<PageUp>` - Move up one page
+- `<PageDown>` - Move down one page
+
+</Accordion>
+
+## Text Selection
+
+<Accordion title="Selection Commands">
+
+Hold `Shift` while navigating to select text:
+
+### Character Selection
+- `<Shift-Left>` - Extend selection left
+- `<Shift-Right>` - Extend selection right
+- `<Shift-Up>` - Extend selection up
+- `<Shift-Down>` - Extend selection down
+
+### Word Selection  
+- `<Ctrl-Shift-Left>` - Extend selection left by word
+- `<Ctrl-Shift-Right>` - Extend selection right by word
+
+### Select All
+- `<Ctrl-A>` - Select all text in buffer
+
+<Tip>
+  All selection commands work just like in notepad or most text editors - hold Shift and navigate to select text.
+</Tip>
+
+</Accordion>
+
+## Clipboard Operations
+
+<Accordion title="Copy, Cut, and Paste">
+
+### Standard Shortcuts
+- `<Ctrl-C>` - Copy selected text (visual mode only)
+- `<Ctrl-X>` - Cut selected text
+- `<Ctrl-V>` - Paste from clipboard
+
+### Alternative Delete
+When text is selected:
+- `<Del>` - Delete selection
+- `<Backspace>` - Delete selection
+
+</Accordion>
+
+## Undo and Redo
+
+<Accordion title="History Navigation">
+
+### Undo Operations
+- `<Ctrl-Z>`, `<Ctrl-U>` - Undo last change
+- `<Ctrl-Shift-Z>`, `<Ctrl-Y>` - Redo
+
+<Note>
+  Standard mode groups consecutive typing into single undo operations, so Ctrl+Z will undo a whole word or sentence rather than character by character.
+</Note>
+
+</Accordion>
+
+## Additional Features
+
+<Accordion title="Font and File Operations">
+
+### Font Size
+- `<Ctrl-=>` - Increase font size
+- `<Ctrl-->` - Decrease font size
+
+### File Operations
+- `<Ctrl-S>` - Save current buffer
+
+</Accordion>
+
+## Mode Switching
+
+<Accordion title="Escape Key">
+
+Unlike Vim mode, pressing `<Escape>` in Standard mode simply returns to insert mode (which is already the current mode). This prevents confusion for users who might accidentally press Escape.
+
+</Accordion>
+
+## Implementation Details
+
+<Note>
+  Standard mode is implemented in `src/mode_standard.cpp:4-21` with a focus on simplicity and familiarity. The mode sets the `InsertModeGroupUndo` and `StayInInsertMode` flags to provide notepad-like behavior.
+</Note>
+
+### Key Differences from Vim Mode
+
+| Feature | Standard Mode | Vim Mode |
+|---------|--------------|----------|
+| Default state | Always insert mode | Normal mode |
+| Cursor type | Insert (vertical bar) | Block in normal, bar in insert |
+| Selection | Shift + arrows | Visual mode (v/V) |
+| Clipboard | Ctrl+C/V/X | y/p/P with registers |
+| Undo grouping | Group by typing session | Per-command |
+
+## Usage Example
+
+```cpp
+// Create editor with standard mode
+auto& editor = ...; // Your ZepEditor instance
+auto* mode = new ZepMode_Standard(editor);
+editor.SetMode(mode);
+
+// Standard mode is now active
+// Users can type and edit like in notepad
+```
+
+## Related
+
+<Card title="Vim Mode" icon="terminal" href="/guides/vim-mode">
+  Learn about the alternative Vim editing mode
+</Card>
+
+<Card title="Keymapping" icon="code" href="/guides/keymapping">  
+  Customize standard mode keybindings
+</Card>

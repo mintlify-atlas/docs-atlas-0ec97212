@@ -1,0 +1,90 @@
+---
+title: Introduction
+description: A simple embeddable text editor with Vim mode support
+---
+
+Zep is a simple embeddable editor with a rendering agnostic design and optional Vim mode. It's built as a modern C++ library that can be integrated as a single header, CMake library, or directly into your project source.
+
+## What is Zep?
+
+Zep provides a lightweight text editing component that can be embedded in game engines, developer tools, and live coding environments. The core library is dependency-free and requires only a modern C++14 compiler.
+
+Out of the box, Zep can render to:
+- **ImGui** windows - perfect for game engines
+- **Qt** widgets - ideal for desktop applications
+- Custom renderers via extensible display layer
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Modal & Standard Editing" icon="keyboard">
+    Choose between Vim-style modal editing or standard notepad-style editing modes
+  </Card>
+  
+  <Card title="Syntax Highlighting" icon="code">
+    Built-in syntax highlighting engine that's easy to extend with custom highlighters
+  </Card>
+  
+  <Card title="Splits & Tabs" icon="table-columns">
+    Organize your workspace with vertical/horizontal splits and tabbed windows
+  </Card>
+  
+  <Card title="No Dependencies" icon="feather">
+    Core library is completely dependency-free, cross-platform, and small
+  </Card>
+  
+  <Card title="Theme Support" icon="palette">
+    Switch between dark and light themes with customizable color schemes
+  </Card>
+  
+  <Card title="Search & REPL" icon="magnifying-glass">
+    Ctrl+P fuzzy search and REPL mode for integrating scripting languages
+  </Card>
+</CardGroup>
+
+## Why Use Zep?
+
+Zep solves a common problem: you need a text editor component but don't want the massive dependency of something like NeoVim. Zep is:
+
+- **Small & Fast** - Minimal footprint with no external dependencies
+- **Embeddable** - Drop it into your game engine or application
+- **Vim-friendly** - Use Vim keystrokes in your tools without frustration
+- **Flexible** - Single header, static library, or installed package
+- **Modern** - Built with modern C++14 and CMake
+
+## Use Cases
+
+### Game Engines
+Embed a console or script editor directly in your game engine for live coding and debugging.
+
+### Developer Tools
+Add powerful text editing capabilities to your IDE, debugger, or custom development environment.
+
+### Live Coding
+Zep's minimal mode is perfect for live coding environments where you need a responsive, distraction-free editor.
+
+## Requirements
+
+- C++14 compiler or later
+- CMake 3.2 or later (for CMake builds)
+- Builds on:
+  - Visual Studio 2017+
+  - GCC 6+
+  - Clang
+  - Xcode on macOS
+
+<Note>
+  The core Zep library has **zero dependencies**. Only the demo applications require additional packages like SDL2 or Qt.
+</Note>
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Get Zep installed in your project
+  </Card>
+  
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Build your first editor in 5 minutes
+  </Card>
+</CardGroup>

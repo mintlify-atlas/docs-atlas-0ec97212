@@ -1,0 +1,362 @@
+---
+title: Custom Keymapping
+description: Extend and customize Zep's keybindings by adding your own commands to any editing mode
+---
+
+Zep uses a flexible keymap system that allows you to add custom keybindings to any mode. The system supports command composition with counts, registers, and special key sequences.
+
+## KeyMap Basics
+
+The `KeyMap` class provides a tree-based structure for matching key sequences to command IDs. Each mode (Vim, Standard, etc.) maintains multiple keymaps for different contexts.
+
+<Note>
+  Keymaps are organized as trees where each node represents a token (key or special sequence). This allows efficient matching of multi-key sequences like `dd` or `ci(`.
+</Note>
+
+## Key Sequence Format
+
+<Accordion title="Key Notation">
+
+### Special Keys
+Zep uses angle brackets for special keys:
+
+```cpp
+"<C-x>"     // Ctrl+x
+"<S-Return>" // Shift+Return  
+"<C-S-z>"   // Ctrl+Shift+z
+"<Left>"    // Left arrow
+"<PageDown>" // Page down
+"<F8>"      // Function key F8
+```
+
+### Regular Keys
+Regular characters are used directly:
+
+```cpp
+"dd"   // d followed by d
+"yy"   // y followed by y
+"gg"   // g followed by g  
+"abc"  // a, b, c sequence
+```
+
+### Wildcards
+Special tokens for pattern matching:
+
+- `<D>` - Matches digits (for command counts)
+- `<.>` - Matches any single character
+- `<R>` - Matches register specification (`"a`, `"b`, etc.)
+
+</Accordion>
+
+## Available Special Keys
+
+<Accordion title="Supported Keys">
+
+```cpp
+// Navigation
+<Left>, <Right>, <Up>, <Down>
+<Home>, <End>
+<PageUp>, <PageDown>
+
+// Editing  
+<Return>, <Escape>, <Backspace>, <Tab>, <Del>
+
+// Function Keys
+<F1> through <F12>
+
+// Modifiers (can be combined)
+C-  // Control
+S-  // Shift
+```
+
+<Tip>
+  Modifier keys must be capitalized and separated by hyphens: `<C-S-x>` not `<c-s-x>`
+</Tip>
+
+</Accordion>
+
+## Adding Keybindings
+
+<Accordion title="Basic keymap_add Usage">
+
+The `keymap_add` function adds a command to one or more keymaps:
+
+```cpp
+#include "zep/keymap.h"
+
+// Add to single keymap
+keymap_add(myKeyMap, "<C-x>", id_MyCommand);
+
+// Add to multiple keymaps  
+keymap_add({ &normalMap, &insertMap }, { "<C-s>" }, id_Save);
+
+// Add multiple key sequences for same command
+keymap_add(myKeyMap, { "dd", "<Del>" }, id_DeleteLine);
+```
+
+### Function Signature
+
+```cpp
+bool keymap_add(
+    KeyMap& map,                          // Target keymap
+    const std::string& strCommand,        // Key sequence
+    const StringId& commandId,            // Command to execute
+    KeyMapAdd opt = KeyMapAdd::Replace    // Replace or error on duplicate
+);
+
+// Multi-map version
+bool keymap_add(
+    const std::vector<KeyMap*>& maps,     // Multiple keymaps
+    const std::vector<std::string>& commands, // Multiple sequences  
+    const StringId& commandId,
+    KeyMapAdd opt = KeyMapAdd::Replace
+);
+```
+
+</Accordion>
+
+## Command IDs
+
+<Accordion title="Defining Commands">
+
+Commands are identified by `StringId` objects. Zep provides a macro for declaring them:
+
+```cpp
+// Define a command ID
+DECLARE_COMMANDID(MyCustomCommand)
+
+// This expands to:
+// const StringId id_MyCustomCommand("MyCustomCommand");
+```
+
+### Built-in Command IDs
+
+Zep includes many predefined commands in `include/zep/keymap.h:18-173`:
+
+```cpp
+id_InsertMode, id_NormalMode, id_VisualMode
+id_Undo, id_Redo
+id_Copy, id_Paste  
+id_MotionUp, id_MotionDown, id_MotionLeft, id_MotionRight
+id_DeleteLine, id_DeleteWord
+id_Save
+// ... and many more
+```
+
+</Accordion>
+
+## Extending a Mode
+
+<Accordion title="Custom Mode Implementation">
+
+Create a custom mode by inheriting from `ZepMode` or an existing mode:
+
+```cpp
+class MyCustomMode : public ZepMode_Vim
+{
+public:
+    MyCustomMode(ZepEditor& editor) : ZepMode_Vim(editor) {}
+    
+    virtual void SetupKeyMaps() override
+    {
+        // Call parent to get standard Vim keys
+        ZepMode_Vim::SetupKeyMaps();
+        
+        // Add custom keybindings
+        keymap_add({ &m_normalMap }, { "<C-t>" }, id_MyCustomCommand);
+        keymap_add({ &m_insertMap }, { "<C-Space>" }, id_AutoComplete);
+        
+        // Override existing binding
+        keymap_add(m_normalMap, "dd", id_MyDeleteLine, KeyMapAdd::Replace);
+    }
+    
+    const char* Name() const override { return "MyMode"; }
+};
+```
+
+</Accordion>
+
+## Command Counts and Registers
+
+<Accordion title="Using Wildcards">
+
+Add keybindings that accept counts and registers:
+
+```cpp
+// Accept optional count before command
+// Example: 5dd (delete 5 lines)
+AddKeyMapWithCountRegisters(
+    { &m_normalMap }, 
+    { "<D>d<D>d", "dd" }, 
+    id_DeleteLine
+);
+
+// Accept register specification
+// Example: "ayy (yank to register a)  
+AddKeyMapWithCountRegisters(
+    { &m_normalMap },
+    { "<R>yy" },
+    id_YankLine  
+);
+
+// Accept any character
+// Example: f<char> (find character)
+AddKeyMapWithCountRegisters(
+    { &m_normalMap },
+    { "f<.>" },
+    id_Find
+);
+```
+
+### Accessing Captured Data
+
+In your command handler:
+
+```cpp
+KeyMapResult result;
+keymap_find(map, "5dd", result);
+
+// result.TotalCount() returns 5
+// result.captureNumbers contains [5]
+// result.foundMapping == id_DeleteLine
+```
+
+</Accordion>
+
+## Querying Keymaps
+
+<Accordion title="keymap_find Function">
+
+Find what command a key sequence maps to:
+
+```cpp
+KeyMapResult result;
+keymap_find(myKeyMap, "<C-x>5dd", result);
+
+if (result.foundMapping != StringId())
+{
+    // Command found
+    int count = result.TotalCount();           // Total count
+    char reg = result.RegisterName();          // Register ('a', 'b', etc.)
+    auto& nums = result.captureNumbers;        // All captured numbers
+    auto& chars = result.captureChars;         // All captured chars
+    
+    // Execute the command
+    ExecuteCommand(result.foundMapping, count, reg);
+}
+else if (result.needMoreChars)
+{
+    // Partial match, need more input
+    DisplayStatus("Waiting for more keys...");
+}
+else  
+{
+    // No match, treat as text input
+    InsertText(result.commandWithoutGroups);
+}
+```
+
+</Accordion>
+
+## Debugging Keymaps
+
+<Accordion title="Dumping Keymap Trees">
+
+Visualize the keymap structure:
+
+```cpp
+#include <sstream>
+
+std::ostringstream str;
+keymap_dump(myKeyMap, str);
+std::cout << str.str();
+
+// Output shows tree structure:
+// d
+//   d : DeleteLine
+//   w : DeleteWord  
+//   <D>
+//     w : DeleteWord
+// y
+//   y : YankLine
+```
+
+</Accordion>
+
+## Complete Example
+
+<Accordion title="Custom Command with Keybinding">
+
+```cpp
+#include "zep/mode.h"
+#include "zep/keymap.h"
+
+// 1. Define command ID
+DECLARE_COMMANDID(DuplicateLine)
+
+// 2. Create custom mode
+class MyEditorMode : public ZepMode_Vim
+{
+public:
+    MyEditorMode(ZepEditor& editor) : ZepMode_Vim(editor) {}
+    
+    void SetupKeyMaps() override
+    {
+        ZepMode_Vim::SetupKeyMaps();
+        
+        // Bind Ctrl+D to duplicate current line
+        keymap_add({ &m_normalMap, &m_insertMap }, 
+                   { "<C-d>" }, 
+                   id_DuplicateLine);
+    }
+    
+    void HandleCommand(const StringId& cmd, const KeyMapResult& result) override
+    {
+        if (cmd == id_DuplicateLine)
+        {
+            // Get current line
+            auto& buffer = GetCurrentWindow()->GetBuffer();
+            auto cursor = GetCurrentWindow()->GetBufferCursor();
+            auto lineStart = buffer.GetLinePos(cursor, LineLocation::LineBegin);
+            auto lineEnd = buffer.GetLinePos(cursor, LineLocation::LineEnd);
+            
+            // Duplicate it
+            std::string line(buffer.begin() + lineStart, 
+                           buffer.begin() + lineEnd);
+            buffer.Insert(lineEnd, "\n" + line);
+            return;
+        }
+        
+        // Fallback to parent  
+        ZepMode_Vim::HandleCommand(cmd, result);
+    }
+};
+
+// 3. Use the mode
+void SetupEditor(ZepEditor& editor)
+{
+    auto* mode = new MyEditorMode(editor);
+    editor.RegisterMode(mode);
+    editor.SetGlobalMode("MyMode");
+}
+```
+
+</Accordion>
+
+## Implementation Reference
+
+The keymap system is implemented in:
+- `include/zep/keymap.h:174-232` - KeyMap structures and functions  
+- `src/keymap.cpp` - Implementation details
+- `src/mode_vim.cpp:78-269` - Example usage in Vim mode
+- `src/mode_standard.cpp:49-89` - Example usage in Standard mode
+
+## Related
+
+<Card title="Vim Mode" icon="terminal" href="/guides/vim-mode">
+  See how Vim mode uses keymaps
+</Card>
+
+<Card title="Standard Mode" icon="keyboard" href="/guides/standard-mode">
+  See standard mode keybindings
+</Card>

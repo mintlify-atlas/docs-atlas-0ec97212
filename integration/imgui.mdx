@@ -1,0 +1,460 @@
+---
+title: ImGui Integration
+description: Integrate Zep with Dear ImGui for game engines and real-time applications
+---
+
+Zep provides first-class support for Dear ImGui, making it perfect for embedding in game engines, real-time applications, and tools that already use ImGui.
+
+## Overview
+
+The ImGui integration provides:
+
+- **ZepDisplay_ImGui**: Rendering backend using ImGui's draw list API
+- **ZepEditor_ImGui**: Editor with ImGui-specific input handling
+- **ZepFont_ImGui**: Font management integrated with ImGui's font system
+
+All ImGui-specific code is in the `include/zep/imgui/` directory.
+
+## Quick Start
+
+<Steps>
+  <Step title="Include Zep Headers">
+    Include the ImGui-specific Zep headers:
+    
+    ```cpp
+    #include <zep/imgui/editor_imgui.h>
+    #include <zep/imgui/display_imgui.h>
+    #include <imgui.h>
+    ```
+  </Step>
+  
+  <Step title="Create the Editor">
+    Instantiate a Zep editor with ImGui display:
+    
+    ```cpp
+    using namespace Zep;
+    
+    auto pixelScale = NVec2f(1.0f, 1.0f);
+    ZepEditor_ImGui editor("/path/to/config", pixelScale);
+    ```
+  </Step>
+  
+  <Step title="Render Each Frame">
+    In your ImGui render loop:
+    
+    ```cpp
+    ImGui::Begin("Editor");
+    
+    auto min = ImGui::GetCursorScreenPos();
+    auto max = ImGui::GetContentRegionAvail();
+    
+    editor.SetDisplayRegion(
+        NVec2f(min.x, min.y),
+        NVec2f(min.x + max.x, min.y + max.y)
+    );
+    
+    editor.Display();
+    editor.HandleInput();
+    
+    ImGui::End();
+    ```
+  </Step>
+</Steps>
+
+## Complete Working Example
+
+Here's a complete example based on the demo_imgui application:
+
+```cpp main.cpp
+#include <SDL.h>
+#include <imgui.h>
+#include <imgui_impl_sdl.h>
+#include <imgui_impl_opengl3.h>
+
+#include <zep/imgui/editor_imgui.h>
+#include <zep/imgui/display_imgui.h>
+#include <zep/mode_vim.h>
+#include <zep/mode_standard.h>
+
+using namespace Zep;
+
+int main(int argc, char* argv[])
+{
+    // Initialize SDL and OpenGL
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER);
+    
+    SDL_Window* window = SDL_CreateWindow(
+        "Zep Editor",
+        SDL_WINDOWPOS_CENTERED,
+        SDL_WINDOWPOS_CENTERED,
+        1280, 720,
+        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE
+    );
+    
+    SDL_GLContext gl_context = SDL_GL_CreateContext(window);
+    SDL_GL_SetSwapInterval(1); // VSync
+    
+    // Initialize ImGui
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    
+    ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
+    ImGui_ImplOpenGL3_Init("#version 130");
+    
+    // Create Zep editor
+    auto pixelScale = NVec2f(1.0f, 1.0f);
+    ZepEditor_ImGui editor(SDL_GetBasePath(), pixelScale);
+    
+    // Set up fonts (optional, but recommended)
+    auto& io = ImGui::GetIO();
+    auto pImFont = io.Fonts->AddFontFromFileTTF(
+        "Cousine-Regular.ttf", 
+        14.0f
+    );
+    
+    auto& display = static_cast<ZepDisplay_ImGui&>(editor.GetDisplay());
+    auto zepFont = std::make_shared<ZepFont_ImGui>(
+        display, 
+        pImFont, 
+        14
+    );
+    display.SetFont(ZepTextType::Text, zepFont);
+    display.SetFont(ZepTextType::UI, zepFont);
+    
+    // Load initial content
+    editor.InitWithText("main.cpp", "// Your code here\n");
+    
+    // Set editing mode
+    editor.SetGlobalMode(ZepMode_Vim::StaticName());
+    
+    // Main loop
+    bool running = true;
+    while (running)
+    {
+        SDL_Event event;
+        while (SDL_PollEvent(&event))
+        {
+            ImGui_ImplSDL2_ProcessEvent(&event);
+            if (event.type == SDL_QUIT)
+                running = false;
+        }
+        
+        // Start ImGui frame
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplSDL2_NewFrame(window);
+        ImGui::NewFrame();
+        
+        // Editor window
+        ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(
+            ImGui::GetIO().DisplaySize, 
+            ImGuiCond_Always
+        );
+        
+        ImGui::Begin("Zep", nullptr, 
+            ImGuiWindowFlags_NoCollapse | 
+            ImGuiWindowFlags_NoTitleBar |
+            ImGuiWindowFlags_NoResize
+        );
+        
+        auto min = ImGui::GetCursorScreenPos();
+        auto max = ImGui::GetContentRegionAvail();
+        
+        editor.SetDisplayRegion(
+            NVec2f(min.x, min.y),
+            NVec2f(min.x + max.x, min.y + max.y)
+        );
+        
+        editor.Display();
+        editor.HandleInput();
+        
+        ImGui::End();
+        
+        // Render
+        ImGui::Render();
+        glClear(GL_COLOR_BUFFER_BIT);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        SDL_GL_SwapWindow(window);
+    }
+    
+    // Cleanup
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplSDL2_Shutdown();
+    ImGui::DestroyContext();
+    SDL_GL_DeleteContext(gl_context);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    
+    return 0;
+}
+```
+
+## Font Setup
+
+Zep integrates with ImGui's font system. Here's how to set up custom fonts:
+
+```cpp
+// Add font to ImGui
+auto& io = ImGui::GetIO();
+ImFontConfig config;
+config.OversampleH = 4;
+config.OversampleV = 4;
+
+auto pImFont = io.Fonts->AddFontFromFileTTF(
+    "fonts/Cousine-Regular.ttf",
+    16.0f,  // Size in pixels
+    &config
+);
+
+// Build font atlas
+io.Fonts->Build();
+
+// Create Zep font wrapper
+auto& display = static_cast<ZepDisplay_ImGui&>(editor.GetDisplay());
+auto zepFont = std::make_shared<ZepFont_ImGui>(
+    display,
+    pImFont,
+    16  // Pixel height
+);
+
+// Set fonts for different text types
+display.SetFont(ZepTextType::Text, zepFont);
+display.SetFont(ZepTextType::UI, zepFont);
+
+// Different sizes for headings (Markdown)
+auto headingFont = std::make_shared<ZepFont_ImGui>(
+    display, 
+    pImFont, 
+    24
+);
+display.SetFont(ZepTextType::Heading1, headingFont);
+```
+
+### Unicode Support
+
+For Unicode character support:
+
+```cpp
+// Define character ranges
+ImVector<ImWchar> ranges;
+ImFontGlyphRangesBuilder builder;
+builder.AddRanges(io.Fonts->GetGlyphRangesDefault());
+builder.AddRanges(io.Fonts->GetGlyphRangesCyrillic());
+
+// Custom ranges (e.g., Greek)
+static ImWchar greek_range[] = { 0x300, 0x52F, 0x1f00, 0x1fff, 0, 0 };
+builder.AddRanges(greek_range);
+
+builder.BuildRanges(&ranges);
+
+// Add font with ranges
+auto pImFont = io.Fonts->AddFontFromFileTTF(
+    "font.ttf",
+    16.0f,
+    nullptr,
+    ranges.Data
+);
+```
+
+## Input Handling
+
+The `ZepEditor_ImGui::HandleInput()` method automatically processes:
+
+- **Keyboard input**: Text entry, special keys (arrows, delete, etc.)
+- **Mouse input**: Clicks, selection, scrolling
+- **Modifiers**: Ctrl, Alt, Shift combinations
+
+### Custom Key Mapping
+
+Zep maps ImGui keys to its internal key codes:
+
+```cpp
+// From editor_imgui.h - automatically handled
+static std::map<int, int> MapUSBKeys = {
+    { ImGuiKey_F1, ExtKeys::F1 },
+    { ImGuiKey_Tab, ExtKeys::TAB },
+    { ImGuiKey_Escape, ExtKeys::ESCAPE },
+    { ImGuiKey_Enter, ExtKeys::RETURN },
+    { ImGuiKey_Backspace, ExtKeys::BACKSPACE },
+    { ImGuiKey_Delete, ExtKeys::DEL },
+    { ImGuiKey_Home, ExtKeys::HOME },
+    { ImGuiKey_End, ExtKeys::END },
+    { ImGuiKey_RightArrow, ExtKeys::RIGHT },
+    { ImGuiKey_LeftArrow, ExtKeys::LEFT },
+    // ... and more
+};
+```
+
+## Display Region Setup
+
+The display region tells Zep where to render. Always set it before calling `Display()`:
+
+```cpp
+// Get the available space in the current ImGui window
+auto min = ImGui::GetCursorScreenPos();
+auto max = ImGui::GetContentRegionAvail();
+
+// Ensure valid dimensions
+max.x = std::max(1.0f, max.x);
+max.y = std::max(1.0f, max.y);
+
+// Set the region (top-left and bottom-right corners)
+editor.SetDisplayRegion(
+    NVec2f(min.x, min.y),
+    NVec2f(min.x + max.x, min.y + max.y)
+);
+```
+
+## Rendering Details
+
+### How ZepDisplay_ImGui Works
+
+Zep uses ImGui's low-level draw list API:
+
+```cpp
+// From display_imgui.h
+void ZepDisplay_ImGui::DrawChars(
+    ZepFont& font, 
+    const NVec2f& pos, 
+    const NVec4f& col, 
+    const uint8_t* text_begin, 
+    const uint8_t* text_end
+) const
+{
+    auto imFont = static_cast<ZepFont_ImGui&>(font).GetImFont();
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    
+    const auto color = ImGui::ColorConvertFloat4ToU32(
+        ImVec4(col.x, col.y, col.z, col.w)
+    );
+    
+    drawList->AddText(
+        imFont,
+        float(font.GetPixelHeight()),
+        toImVec2(pos),
+        color,
+        (const char*)text_begin,
+        (const char*)text_end
+    );
+}
+```
+
+### Clipping
+
+Zep automatically handles clipping for scrolled content:
+
+```cpp
+void ZepDisplay_ImGui::SetClipRect(const NRectf& rc)
+{
+    m_clipRect = rc;
+    if (m_clipRect.Width() > 0)
+    {
+        ImGui::GetWindowDrawList()->PushClipRect(
+            toImVec2(m_clipRect.topLeftPx),
+            toImVec2(m_clipRect.bottomRightPx)
+        );
+    }
+}
+```
+
+## Window Management
+
+For a full-window editor (like the demo):
+
+```cpp
+int w, h;
+SDL_GetWindowSize(window, &w, &h);
+
+auto menuSize = ImGui::GetStyle().FramePadding.y * 2 
+                + ImGui::GetFontSize();
+
+ImGui::SetNextWindowPos(ImVec2(0, menuSize), ImGuiCond_Always);
+ImGui::SetNextWindowSize(
+    ImVec2(float(w), float(h - menuSize)), 
+    ImGuiCond_Always
+);
+
+ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+ImGui::Begin("Zep", nullptr, 
+    ImGuiWindowFlags_NoCollapse | 
+    ImGuiWindowFlags_NoTitleBar |
+    ImGuiWindowFlags_NoScrollbar
+);
+
+// Editor rendering here
+
+ImGui::End();
+ImGui::PopStyleVar();
+```
+
+## Features Demo
+
+<CodeGroup>
+```cpp Multiple Buffers
+// Create multiple buffers
+auto buffer1 = editor.GetFileBuffer("file1.cpp");
+auto buffer2 = editor.GetFileBuffer("file2.h");
+
+// Switch between them
+editor.SetCurrentWindow(
+    editor.GetActiveTabWindow()->GetActiveWindow()
+);
+```
+
+```cpp Splits
+// Add horizontal split
+auto pTabWindow = editor.GetActiveTabWindow();
+auto pBuffer = editor.GetActiveBuffer();
+
+pTabWindow->AddWindow(
+    pBuffer, 
+    pTabWindow->GetActiveWindow(), 
+    RegionLayoutType::HBox  // or VBox for vertical
+);
+```
+
+```cpp Themes
+// Switch between light and dark themes
+editor.GetTheme().SetThemeType(ThemeType::Dark);
+// or
+editor.GetTheme().SetThemeType(ThemeType::Light);
+```
+
+```cpp Editing Modes
+// Switch to Vim mode
+editor.SetGlobalMode(ZepMode_Vim::StaticName());
+
+// Switch to Standard mode
+editor.SetGlobalMode(ZepMode_Standard::StaticName());
+```
+</CodeGroup>
+
+## Performance Tips
+
+<Tip>
+  **Optimize refresh**: Zep provides `RefreshRequired()` to check if redrawing is needed:
+  
+  ```cpp
+  if (editor.RefreshRequired())
+  {
+      // Only render when needed
+      editor.Display();
+  }
+  ```
+</Tip>
+
+<Tip>
+  **Font caching**: Zep caches character metrics. Build the ImGui font atlas once at startup, not every frame.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Editor API" icon="code" href="/api/editor">
+    Learn about the core editor API
+  </Card>
+  <Card title="Vim Mode" icon="keyboard" href="/features/vim-mode">
+    Explore Vim keybindings and commands
+  </Card>
+</CardGroup>

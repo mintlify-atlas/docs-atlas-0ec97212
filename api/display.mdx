@@ -1,0 +1,206 @@
+---
+title: ZepDisplay
+description: Abstract display interface for rendering text editor content
+---
+
+`ZepDisplay` is the abstract base class that defines the rendering interface for Zep. To integrate Zep with a custom graphics backend, you need to implement a class that inherits from `ZepDisplay` and override its pure virtual methods.
+
+## Overview
+
+The display system provides an abstraction layer between the editor logic and the rendering backend. This allows Zep to work with different UI frameworks like ImGui, Qt, or custom renderers.
+
+**Header:** `include/zep/display.h`
+
+## Core Rendering Methods
+
+These methods must be implemented for any custom display backend:
+
+### DrawChars
+
+```cpp
+virtual void DrawChars(
+    ZepFont& font,
+    const NVec2f& pos,
+    const NVec4f& col,
+    const uint8_t* text_begin,
+    const uint8_t* text_end = nullptr
+) const = 0;
+```
+
+Renders text characters at the specified position.
+
+**Parameters:**
+- `font` - The font to use for rendering
+- `pos` - Screen position in pixels
+- `col` - RGBA color (values 0.0 to 1.0)
+- `text_begin` - Pointer to the first character
+- `text_end` - Optional pointer past the last character (if `nullptr`, text is null-terminated)
+
+### DrawLine
+
+```cpp
+virtual void DrawLine(
+    const NVec2f& start,
+    const NVec2f& end,
+    const NVec4f& color = NVec4f(1.0f),
+    float width = 1.0f
+) const = 0;
+```
+
+Draws a line between two points.
+
+**Parameters:**
+- `start` - Starting position in pixels
+- `end` - Ending position in pixels
+- `color` - RGBA color (defaults to white)
+- `width` - Line width in pixels
+
+### DrawRectFilled
+
+```cpp
+virtual void DrawRectFilled(
+    const NRectf& rc,
+    const NVec4f& col = NVec4f(1.0f)
+) const = 0;
+```
+
+Draws a filled rectangle.
+
+**Parameters:**
+- `rc` - Rectangle bounds
+- `col` - RGBA color (defaults to white)
+
+### SetClipRect
+
+```cpp
+virtual void SetClipRect(const NRectf& rc) = 0;
+```
+
+Sets the clipping rectangle for subsequent drawing operations.
+
+**Parameters:**
+- `rc` - Rectangle to clip to
+
+### GetFont
+
+```cpp
+virtual ZepFont& GetFont(ZepTextType type) = 0;
+```
+
+Returns the font for a specific text type.
+
+**Parameters:**
+- `type` - One of: `UI`, `Text`, `Heading1`, `Heading2`, `Heading3`
+
+## Helper Methods
+
+These methods have default implementations but can be overridden:
+
+### DrawRect
+
+```cpp
+virtual void DrawRect(
+    const NRectf& rc,
+    const NVec4f& col = NVec4f(1.0f)
+) const;
+```
+
+Draws a rectangle outline (default implementation calls `DrawLine` four times).
+
+### GetCodePointCount
+
+```cpp
+virtual uint32_t GetCodePointCount(
+    const uint8_t* pCh,
+    const uint8_t* pEnd
+) const;
+```
+
+Counts UTF-8 code points in a text range.
+
+## Font Management
+
+### SetFont
+
+```cpp
+virtual void SetFont(
+    ZepTextType type,
+    std::shared_ptr<ZepFont> spFont
+);
+```
+
+Sets a custom font for a text type.
+
+### Bigger / Smaller
+
+```cpp
+void Bigger();
+void Smaller();
+```
+
+Increases or decreases the font scale.
+
+## Pixel Scale
+
+### GetPixelScale / SetPixelScale
+
+```cpp
+const NVec2f& GetPixelScale() const;
+void SetPixelScale(const NVec2f& scale);
+```
+
+Gets or sets the DPI/pixel scale factor for high-DPI displays.
+
+## Layout Management
+
+### LayoutDirty
+
+```cpp
+virtual bool LayoutDirty() const;
+```
+
+Returns `true` if the layout needs to be recalculated.
+
+### SetLayoutDirty
+
+```cpp
+virtual void SetLayoutDirty(bool changed = true);
+```
+
+Marks the layout as needing recalculation.
+
+## Example Implementation
+
+See `ZepDisplayNull` in `display.h:130` for a minimal reference implementation that discards all drawing operations.
+
+## Related Types
+
+### ZepTextType
+
+```cpp
+enum class ZepTextType {
+    UI,
+    Text,
+    Heading1,
+    Heading2,
+    Heading3,
+    Count
+};
+```
+
+### ZepFont
+
+Abstract base class for fonts. Key methods:
+
+```cpp
+virtual void SetPixelHeight(int height) = 0;
+virtual NVec2f GetTextSize(
+    const uint8_t* pBegin,
+    const uint8_t* pEnd = nullptr
+) const = 0;
+```
+
+## See Also
+
+- [ZepDisplay_ImGui](/api/display-imgui) - ImGui implementation
+- [ZepDisplay_Qt](/api/display-qt) - Qt implementation

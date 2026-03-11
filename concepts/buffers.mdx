@@ -1,0 +1,394 @@
+---
+title: Buffers
+description: Understanding ZepBuffer and the gap buffer data structure
+---
+
+Zep uses a gap buffer data structure for efficient text editing operations. The `ZepBuffer` class provides a high-level interface for text manipulation with full UTF-8 support.
+
+## ZepBuffer Overview
+
+A buffer represents the text content of a file or unnamed document. It's the fundamental data structure for all text operations.
+
+From `include/zep/buffer.h:113-118`:
+
+```cpp
+class ZepBuffer : public ZepComponent
+{
+public:
+    ZepBuffer(ZepEditor& editor, const std::string& strName);
+    ZepBuffer(ZepEditor& editor, const fs::path& path);
+    virtual ~ZepBuffer();
+```
+
+<Note>
+Buffers can be created from a file path (loading the file content) or with just a name (for new, unsaved content).
+</Note>
+
+## Gap Buffer Data Structure
+
+The gap buffer is an efficient data structure for text editors that maintains a "gap" at the cursor position:
+
+```
+Before gap: "Hello World"
+           |
+           cursor
+           
+With gap: "Hello|_____| World"
+          Text before gap    Text after gap
+                   gap
+```
+
+From `include/zep/gap_buffer.h:42-49`:
+
+```cpp
+// A Gap buffer is a special type of buffer that has favourable performance 
+// when inserting/removing entries in a local region. Thus memory moving 
+// cost is amortised. Editors like emacs use it to efficiently manage 
+// an edit buffer.
+```
+
+### Gap Buffer Implementation
+
+From `include/zep/gap_buffer.h:64-69`:
+
+```cpp
+T *m_pStart = nullptr;       // Start of the buffer
+T *m_pEnd = nullptr;         // Pointer after the end 
+T *m_pGapStart = nullptr;    // Gap start position
+T *m_pGapEnd = nullptr;      // End of the gap, just beyond
+size_t m_defaultGap = 0;     // Current size of gap
+```
+
+### Performance Characteristics
+
+<CardGroup cols={3}>
+  <Card title="Insert at Cursor" icon="i-cursor">
+    **O(1)** - No data movement required
+  </Card>
+  <Card title="Delete at Cursor" icon="delete-left">
+    **O(1)** - Just expand the gap
+  </Card>
+  <Card title="Move Cursor" icon="arrows-left-right">
+    **O(n)** - Gap moves with cursor
+  </Card>
+</CardGroup>
+
+<Info>
+The gap buffer is most efficient when edits happen in the same region. Moving the cursor to a distant location requires moving the gap, which involves copying memory.
+</Info>
+
+## Text Operations
+
+### Insertion
+
+From `include/zep/buffer.h:155` and implementation in `src/buffer.cpp:1104-1174`:
+
+```cpp
+bool Insert(const GlyphIterator& startOffset, 
+            const std::string& str, 
+            ChangeRecord& changeRecord);
+```
+
+Insertion workflow:
+1. Validate the start position
+2. Signal pre-insert to observers
+3. Update line end tracking
+4. Insert into gap buffer
+5. Broadcast change notification
+
+### Deletion
+
+From `include/zep/buffer.h:154` and implementation in `src/buffer.cpp:1223-1269`:
+
+```cpp
+bool Delete(const GlyphIterator& startIndex, 
+            const GlyphIterator& endIndex, 
+            ChangeRecord& changeRecord);
+```
+
+Deletion process:
+1. Signal pre-delete to observers
+2. Store deleted text in change record (for undo)
+3. Update line end indices
+4. Remove from gap buffer
+5. Broadcast deletion notification
+
+### Replacement
+
+From `include/zep/buffer.h:156`:
+
+```cpp
+bool Replace(const GlyphIterator& startIndex, 
+             const GlyphIterator& endIndex, 
+             std::string str, 
+             ReplaceRangeMode mode, 
+             ChangeRecord& changeRecord);
+```
+
+<Accordion title="Replace Modes">
+**ReplaceRangeMode::Replace** - Delete the range, then insert new text
+
+**ReplaceRangeMode::Fill** - Overwrite characters in place (used for visual block mode)
+</Accordion>
+
+## UTF-8 Support
+
+Zep fully supports UTF-8 encoded text through the `GlyphIterator` abstraction:
+
+### GlyphIterator
+
+From `include/zep/buffer.h:129`:
+
+```cpp
+GlyphIterator GetLinePos(GlyphIterator bufferLocation, 
+                        LineLocation lineLocation) const;
+```
+
+The `GlyphIterator` handles multi-byte UTF-8 characters transparently:
+
+- Iterates by **code point**, not by byte
+- Handles variable-width characters correctly
+- Provides clamping and validation
+
+<Info>
+A "glyph" in Zep refers to a Unicode code point. The `GlyphIterator` automatically skips over UTF-8 continuation bytes.
+</Info>
+
+## Line Tracking
+
+Buffers maintain an index of line endings for fast line-based operations:
+
+From `include/zep/buffer.h:177-180`:
+
+```cpp
+const std::vector<ByteIndex> GetLineEnds() const
+{
+    return m_lineEnds;
+}
+```
+
+From `src/buffer.cpp:90-101`:
+
+```cpp
+long ZepBuffer::GetBufferLine(GlyphIterator location) const
+{
+    auto itrLine = std::lower_bound(m_lineEnds.begin(), m_lineEnds.end(), 
+                                    location.Index());
+    if (itrLine != m_lineEnds.end() && location.Index() >= *itrLine)
+    {
+        itrLine++;
+    }
+    long line = long(itrLine - m_lineEnds.begin());
+    line = std::min(std::max(0l, line), long(m_lineEnds.size() - 1));
+    return line;
+}
+```
+
+### Line Operations
+
+<CardGroup cols={2}>
+  <Card title="GetBufferLine" icon="hashtag">
+    Convert byte offset to line number - **O(log n)**
+  </Card>
+  <Card title="GetLineOffsets" icon="ruler">
+    Get start/end offsets for a line - **O(1)**
+  </Card>
+  <Card title="GetLinePos" icon="location-dot">
+    Find position on line (begin, end, first char) - **O(n)**
+  </Card>
+  <Card title="GetLineCount" icon="list-ol">
+    Total number of lines - **O(1)**
+  </Card>
+</CardGroup>
+
+## Buffer Properties
+
+From `include/zep/buffer.h:44-60`:
+
+```cpp
+namespace FileFlags
+{
+enum : uint32_t
+{
+    StrippedCR = (1 << 0),        // Had \r\n, now just \n
+    TerminatedWithZero = (1 << 1), // Has null terminator
+    ReadOnly = (1 << 2),          // Cannot be modified
+    Locked = (1 << 3),            // Cannot be written to disk
+    Dirty = (1 << 4),             // Has unsaved changes
+    HasWarnings = (1 << 6),       // Syntax/semantic warnings
+    HasErrors = (1 << 7),         // Syntax/semantic errors
+    DefaultBuffer = (1 << 8),     // Default startup buffer
+    HasTabs = (1 << 9),           // Contains tab characters
+    HasSpaceTabs = (1 << 10),     // Contains space-based tabs
+    InsertTabs = (1 << 11)        // Insert tabs vs spaces
+};
+}
+```
+
+### Checking Flags
+
+From `include/zep/buffer.h:265-268`:
+
+```cpp
+bool HasFileFlags(uint32_t flags) const;
+void SetFileFlags(uint32_t flags, bool set = true);
+void ClearFileFlags(uint32_t flags);
+void ToggleFileFlag(uint32_t flags);
+```
+
+## Loading and Saving
+
+### Loading Files
+
+From `src/buffer.cpp:712-744`:
+
+```cpp
+void ZepBuffer::Load(const fs::path& path)
+{
+    // Set the name from the path
+    if (path.has_filename())
+    {
+        m_strName = path.filename().string();
+    }
+    
+    // Must set the syntax before the first buffer change messages
+    GetEditor().SetBufferSyntax(*this);
+    
+    if (GetEditor().GetFileSystem().Exists(path))
+    {
+        m_filePath = GetEditor().GetFileSystem().Canonical(path);
+        auto read = GetEditor().GetFileSystem().Read(path);
+        SetText(read, true);
+    }
+    else
+    {
+        Clear();
+        m_filePath = path;
+    }
+}
+```
+
+### Saving Files
+
+From `src/buffer.cpp:746-793`:
+
+```cpp
+bool ZepBuffer::Save(int64_t& size)
+{
+    if (ZTestFlags(m_fileFlags, FileFlags::Locked))
+        return false;
+    
+    if (ZTestFlags(m_fileFlags, FileFlags::ReadOnly))
+        return false;
+    
+    auto str = GetWorkingBuffer().string();
+    
+    // Put back /r/n if necessary while writing the file
+    if (m_fileFlags & FileFlags::StrippedCR)
+    {
+        string_replace_in_place(str, "\n", "\r\n");
+    }
+    
+    // Remove the appended 0 if necessary
+    size = (int64_t)str.size();
+    if (m_fileFlags & FileFlags::TerminatedWithZero)
+    {
+        size--;
+    }
+    
+    if (GetEditor().GetFileSystem().Write(m_filePath, &str[0], (size_t)size))
+    {
+        m_fileFlags = ZClearFlags(m_fileFlags, FileFlags::Dirty);
+        return true;
+    }
+    return false;
+}
+```
+
+<Note>
+Zep automatically handles line ending conversion. Files with `\r\n` line endings have the `\r` stripped on load and restored on save.
+</Note>
+
+## Motions and Navigation
+
+Buffers provide sophisticated motion commands for cursor movement:
+
+From `include/zep/buffer.h:146-151`:
+
+```cpp
+GlyphIterator WordMotion(GlyphIterator start, uint32_t searchType, 
+                        Direction dir) const;
+GlyphIterator EndWordMotion(GlyphIterator start, uint32_t searchType, 
+                           Direction dir) const;
+GlyphIterator ChangeWordMotion(GlyphIterator start, uint32_t searchType, 
+                              Direction dir) const;
+GlyphRange AWordMotion(GlyphIterator start, uint32_t searchType) const;
+GlyphRange InnerWordMotion(GlyphIterator start, uint32_t searchType) const;
+```
+
+<Info>
+These motion commands implement Vim-style text object semantics, like `aw` (a word) and `iw` (inner word).
+</Info>
+
+## Change Records and Undo
+
+Every modification generates a change record:
+
+From `include/zep/buffer.h:97-110`:
+
+```cpp
+struct ChangeRecord
+{
+    std::string strDeleted;
+    std::string strInserted;
+    GlyphIterator itrStart;
+    GlyphIterator itrEnd;
+    
+    void Clear()
+    {
+        strDeleted.clear();
+        itrStart.Invalidate();
+        itrEnd.Invalidate();
+    }
+};
+```
+
+These records are used to build undo/redo commands:
+
+From `include/zep/buffer.h:285-286`:
+
+```cpp
+std::stack<std::shared_ptr<ZepCommand>>& GetUndoStack();
+std::stack<std::shared_ptr<ZepCommand>>& GetRedoStack();
+```
+
+## Range Markers
+
+Buffers support overlay markers for highlighting, errors, and visual feedback:
+
+From `include/zep/buffer.h:232-243`:
+
+```cpp
+void AddRangeMarker(std::shared_ptr<RangeMarker> spMarker);
+void ClearRangeMarker(std::shared_ptr<RangeMarker> spMarker);
+void ClearRangeMarkers(uint32_t types);
+tRangeMarkers GetRangeMarkers(uint32_t types) const;
+tRangeMarkers GetRangeMarkersOnLine(uint32_t types, long line) const;
+void HideMarkers(uint32_t markerType);
+void ShowMarkers(uint32_t markerType, uint32_t displayType);
+
+void ForEachMarker(uint32_t types, Direction dir, 
+                  const GlyphIterator& begin, const GlyphIterator& end, 
+                  std::function<bool(const std::shared_ptr<RangeMarker>&)> fnCB) const;
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Modes" href="/concepts/modes">
+    Learn how modes interact with buffers
+  </Card>
+  <Card title="Syntax Highlighting" href="/concepts/syntax-highlighting">
+    Understand how syntax works with buffers
+  </Card>
+</CardGroup>

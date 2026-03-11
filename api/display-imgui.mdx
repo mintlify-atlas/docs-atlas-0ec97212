@@ -1,0 +1,163 @@
+---
+title: ZepDisplay_ImGui
+description: ImGui display backend implementation for Zep
+---
+
+`ZepDisplay_ImGui` is the ImGui rendering backend for Zep. It implements the `ZepDisplay` interface using Dear ImGui's drawing API.
+
+**Header:** `include/zep/imgui/display_imgui.h`
+
+## Classes
+
+### ZepDisplay_ImGui
+
+ImGui implementation of the display interface.
+
+```cpp
+class ZepDisplay_ImGui : public ZepDisplay
+{
+public:
+    ZepDisplay_ImGui();
+    
+    // ZepDisplay interface implementation
+    void DrawChars(ZepFont& font, const NVec2f& pos, const NVec4f& col,
+                   const uint8_t* text_begin, const uint8_t* text_end) const override;
+    void DrawLine(const NVec2f& start, const NVec2f& end,
+                  const NVec4f& color, float width) const override;
+    void DrawRectFilled(const NRectf& rc, const NVec4f& color) const override;
+    void SetClipRect(const NRectf& rc) override;
+    ZepFont& GetFont(ZepTextType type) override;
+};
+```
+
+### ZepFont_ImGui
+
+ImGui font wrapper.
+
+```cpp
+class ZepFont_ImGui : public ZepFont
+{
+public:
+    ZepFont_ImGui(ZepDisplay& display, ImFont* pFont, int pixelHeight);
+    
+    void SetPixelHeight(int pixelHeight) override;
+    NVec2f GetTextSize(const uint8_t* pBegin,
+                       const uint8_t* pEnd = nullptr) const override;
+    ImFont* GetImFont();
+};
+```
+
+## Implementation Details
+
+### Drawing Operations
+
+All drawing operations use `ImGui::GetWindowDrawList()` to add primitives to the current ImGui window's draw list.
+
+#### DrawChars (display_imgui.h:86)
+
+```cpp
+void DrawChars(ZepFont& font, const NVec2f& pos, const NVec4f& col,
+               const uint8_t* text_begin, const uint8_t* text_end) const override;
+```
+
+- Casts the font to `ZepFont_ImGui` to get the underlying `ImFont*`
+- Uses `ImDrawList::AddText()` to render text
+- Applies clipping rectangle if set
+- Modulates color with `ImGui::GetStyle().Alpha`
+
+#### DrawLine (display_imgui.h:106)
+
+```cpp
+void DrawLine(const NVec2f& start, const NVec2f& end,
+              const NVec4f& color, float width) const override;
+```
+
+- Uses `ImDrawList::AddLine()`
+- Respects the current clipping rectangle
+- Modulates color with style alpha
+
+#### DrawRectFilled (display_imgui.h:123)
+
+```cpp
+void DrawRectFilled(const NRectf& rc, const NVec4f& color) const override;
+```
+
+- Uses `ImDrawList::AddRectFilled()`
+- Applies clipping if active
+
+### Clipping (display_imgui.h:140)
+
+Clipping is managed via `SetClipRect()`. When a clip rect is set:
+- The rect is stored in `m_clipRect`
+- Drawing operations push/pop clip rects using `ImDrawList::PushClipRect()` and `PopClipRect()`
+- A zero-width clip rect disables clipping
+
+### Font Management (display_imgui.h:145)
+
+```cpp
+ZepFont& GetFont(ZepTextType type) override;
+```
+
+- Creates `ZepFont_ImGui` instances on demand
+- Uses the first font from `ImGui::GetIO().Fonts`
+- Scales pixel height by the display's pixel scale
+
+### Text Measurement (display_imgui.h:51)
+
+`ZepFont_ImGui::GetTextSize()` uses `ImFont::CalcTextSizeA()` with:
+- Font size set to pixel height
+- No wrapping (`FLT_MAX` for width)
+- Returns character advance width (not just the glyph bounds)
+- Falls back to 'A' character size for invalid glyphs
+
+### Color Conversion (display_imgui.h:155)
+
+```cpp
+static ImU32 GetStyleModulatedColor(const NVec4f& color);
+```
+
+Converts `NVec4f` colors to ImGui's packed `ImU32` format (ABGR), modulating alpha with `ImGui::GetStyle().Alpha`.
+
+## Helper Functions
+
+The header provides conversion utilities:
+
+```cpp
+inline NVec2f toNVec2f(const ImVec2& im);
+inline ImVec2 toImVec2(const NVec2f& im);
+inline NVec4f toNVec4f(const ImVec4& im);
+inline ImVec4 toImVec4(const NVec4f& im);
+```
+
+## Greek Character Support (display_imgui.h:33)
+
+```cpp
+static ImWchar greek_range[] = { 0x300, 0x52F, 0x1f00, 0x1fff, 0, 0 };
+```
+
+Defines glyph ranges for Greek and extended Latin characters.
+
+## Usage Example
+
+```cpp
+#include "zep/imgui/display_imgui.h"
+#include "zep/editor.h"
+
+// Create editor with ImGui display
+auto spDisplay = std::make_shared<ZepDisplay_ImGui>();
+ZepEditor editor(spDisplay, root_path);
+
+// In your ImGui render loop:
+if (ImGui::Begin("Zep Editor")) {
+    auto displaySize = ImGui::GetContentRegionAvail();
+    editor.SetDisplayRegion(toNVec2f(displaySize));
+    editor.Display();
+}
+ImGui::End();
+```
+
+## Related
+
+- [ZepEditor](/api/editor) - Main editor class
+- [ZepDisplay](/api/display) - Abstract display interface
+- [ZepDisplay_Qt](/api/display-qt) - Qt implementation

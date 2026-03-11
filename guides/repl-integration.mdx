@@ -1,0 +1,507 @@
+---
+title: REPL Integration
+description: Integrate a Read-Eval-Print Loop into Zep for interactive language evaluation
+---
+
+Zep provides built-in REPL (Read-Eval-Print Loop) support through the `ZepMode_Repl` system, allowing you to create interactive programming environments within the editor.
+
+<Note>
+  REPL mode is particularly useful for Lisp-like languages (Janet, Scheme, Clojure) but can be adapted for any language that supports expression evaluation.
+</Note>
+
+## REPL Provider Interface
+
+To integrate a REPL, implement the `IZepReplProvider` interface:
+
+<Accordion title="IZepReplProvider Interface">
+
+```cpp
+struct IZepReplProvider
+{
+    // Parse and evaluate text from buffer at cursor
+    virtual std::string ReplParse(
+        ZepBuffer& text, 
+        const GlyphIterator& cursorOffset, 
+        ReplParseType type
+    );
+    
+    // Parse and evaluate a string directly
+    virtual std::string ReplParse(const std::string& text);
+    
+    // Check if input is a complete form
+    virtual bool ReplIsFormComplete(
+        const std::string& input, 
+        int& depth  // Nesting depth, negative means too many closing parens
+    );
+};
+```
+
+### Parse Types
+
+```cpp
+enum class ReplParseType
+{
+    SubExpression,    // Evaluate innermost expression at cursor
+    OuterExpression,  // Evaluate outermost expression containing cursor
+    Line,            // Evaluate current line
+    All              // Evaluate entire buffer  
+};
+```
+
+</Accordion>
+
+## Registering REPL Commands
+
+<Accordion title="REPL Command Registration">
+
+Zep provides multiple REPL commands with different evaluation scopes:
+
+```cpp
+#include "zep/mode_repl.h"
+
+// Create your REPL provider
+class MyReplProvider : public IZepReplProvider
+{
+    // ... implementation ...
+};
+
+// Register REPL commands
+MyReplProvider* replProvider = new MyReplProvider();
+
+// Main REPL window (<C-e> to open)
+ZepReplExCommand::Register(editor, replProvider);
+
+// Evaluate inner expression (<C-S-Return>)  
+ZepReplEvaluateInnerCommand::Register(editor, replProvider);
+
+// Evaluate outer expression (<C-Return>)
+ZepReplEvaluateOuterCommand::Register(editor, replProvider);
+
+// Evaluate all (<S-Return>)
+ZepReplEvaluateCommand::Register(editor, replProvider);
+```
+
+### Default Keybindings
+
+| Key | Command | Description |
+|-----|---------|-------------|
+| `<C-e>` | Open REPL | Opens REPL window |
+| `<C-Return>` | Eval outer | Evaluates outermost expression |
+| `<C-S-Return>` | Eval inner | Evaluates innermost expression |
+| `<S-Return>` | Eval all | Evaluates entire buffer |
+
+</Accordion>
+
+## REPL Provider Implementation
+
+<Accordion title="Example: Janet REPL">
+
+Here's how to implement a REPL provider for the Janet language:
+
+```cpp
+#include "zep/mode_repl.h"
+#include <janet.h>  // Janet language C API
+
+class JanetReplProvider : public IZepReplProvider
+{
+public:
+    JanetReplProvider()
+    {
+        // Initialize Janet
+        janet_init();
+    }
+    
+    ~JanetReplProvider()
+    {
+        janet_deinit();
+    }
+    
+    std::string ReplParse(const std::string& text) override
+    {
+        if (text.empty())
+            return "";
+            
+        // Parse Janet code
+        JanetTable* env = janet_core_env(NULL);
+        Janet result;
+        
+        const uint8_t* src = (const uint8_t*)text.c_str();
+        
+        // Evaluate
+        int status = janet_dobytes(
+            env,
+            src, 
+            text.length(),
+            "repl",
+            &result
+        );
+        
+        if (status == 0)
+        {
+            // Success - convert result to string  
+            const uint8_t* str = janet_to_string(result);
+            return std::string((const char*)str);
+        }
+        else
+        {
+            // Error
+            const uint8_t* err = janet_to_string(result);
+            return std::string("Error: ") + (const char*)err;
+        }
+    }
+    
+    std::string ReplParse(
+        ZepBuffer& buffer,
+        const GlyphIterator& cursor,
+        ReplParseType type) override
+    {
+        // Extract text based on parse type
+        std::string expr;
+        
+        switch (type)
+        {
+        case ReplParseType::SubExpression:
+            expr = ExtractInnerExpression(buffer, cursor);
+            break;
+        case ReplParseType::OuterExpression:
+            expr = ExtractOuterExpression(buffer, cursor);
+            break;
+        case ReplParseType::Line:
+            expr = ExtractLine(buffer, cursor);
+            break;
+        case ReplParseType::All:
+            expr = std::string(buffer.begin(), buffer.end());
+            break;
+        }
+        
+        return ReplParse(expr);
+    }
+    
+    bool ReplIsFormComplete(
+        const std::string& input, 
+        int& depth) override
+    {
+        // Count parentheses to check if form is complete
+        depth = 0;
+        
+        for (char c : input)
+        {
+            if (c == '(') depth++;
+            if (c == ')') depth--;
+        }
+        
+        // Negative depth means too many closing parens
+        // Zero depth means balanced (complete)
+        // Positive depth means incomplete
+        return depth == 0;
+    }
+    
+private:
+    std::string ExtractInnerExpression(
+        ZepBuffer& buffer, 
+        const GlyphIterator& cursor)
+    {
+        // Find innermost parentheses around cursor
+        // Implementation depends on your language syntax
+        // For Lisps, scan backwards for '(' and forwards for ')'
+        
+        auto start = cursor;
+        auto end = cursor;
+        
+        // Scan backwards to opening paren
+        int depth = 0;
+        while (start > buffer.begin())
+        {
+            if (*start == ')') depth++;
+            if (*start == '(')
+            {
+                if (depth == 0) break;
+                depth--;
+            }
+            --start;
+        }
+        
+        // Scan forwards to closing paren
+        depth = 0;
+        while (end < buffer.end())
+        {
+            if (*end == '(') depth++;
+            if (*end == ')')
+            {
+                if (depth == 0)
+                {
+                    ++end;
+                    break;
+                }
+                depth--;
+            }
+            ++end;
+        }
+        
+        return std::string(start, end);
+    }
+    
+    // Similar implementations for ExtractOuterExpression, ExtractLine...
+};
+```
+
+</Accordion>
+
+## REPL Window Behavior
+
+<Accordion title="Interactive REPL Window">
+
+When you open a REPL window with `<C-e>`, Zep creates an interactive buffer:
+
+```
+>> (+ 1 2)
+3
+>> (defn square [x] (* x x))
+<function square>
+>> (square 5)
+25
+>>
+```
+
+### Features
+
+- **Prompt**: Shows `>> ` for new input
+- **Continuation**: Shows `.. ` for incomplete forms
+- **Multi-line input**: Automatically continues input for unclosed expressions
+- **Auto-indent**: Indents continuation lines based on nesting depth
+- **History**: Previous evaluations remain visible
+- **Syntax highlighting**: Uses the buffer's syntax provider
+
+### Implementation Details
+
+From `src/mode_repl.cpp:92-231`:
+
+```cpp
+const std::string PromptString = ">> ";
+const std::string ContinuationString = ".. ";
+
+// On Return key:
+if (key == ExtKeys::RETURN)
+{
+    // Check if form is complete
+    int indent = 0;
+    bool complete = m_pProvider->ReplIsFormComplete(input, indent);
+    
+    if (!complete)
+    {
+        // Incomplete - add continuation line
+        if (indent < 0)
+        {
+            // Too many closing parens - don't allow
+            return true;
+        }
+        
+        buffer.Insert(buffer.End(), ContinuationString);
+        
+        // Add indentation
+        for (int i = 0; i < indent; i++)
+            buffer.Insert(buffer.End(), " ");
+            
+        return true;
+    }
+    
+    // Complete - evaluate
+    std::string result = m_pProvider->ReplParse(input);
+    buffer.Insert(buffer.End(), result + "\n");
+    
+    // New prompt
+    Prompt();
+}
+```
+
+</Accordion>
+
+## Expression Extraction
+
+<Accordion title="Parsing Expression Boundaries">
+
+For Lisp-like languages, implement parenthesis matching:
+
+```cpp
+std::pair<GlyphIterator, GlyphIterator> FindMatchingParens(
+    ZepBuffer& buffer,
+    GlyphIterator cursor,
+    bool innermost)
+{
+    // For innermost: find smallest enclosing expression
+    // For outermost: find largest enclosing expression
+    
+    auto start = cursor;
+    auto end = cursor;
+    
+    if (innermost)
+    {
+        // Find closest opening paren before cursor
+        int depth = 0;
+        while (start > buffer.begin())
+        {
+            if (*start == ')') depth++;
+            if (*start == '(')
+            {
+                if (depth == 0) break;
+                depth--;
+            }
+            --start;
+        }
+        
+        // Find matching closing paren
+        depth = 0;
+        end = start + 1;
+        while (end < buffer.end())
+        {
+            if (*end == '(') depth++;
+            if (*end == ')')
+            {
+                if (depth == 0) break;
+                depth--;
+            }
+            ++end;
+        }
+    }
+    else  // outermost
+    {
+        // Keep expanding until no more enclosing parens
+        while (start > buffer.begin())
+        {
+            auto prev = start - 1;
+            if (*prev == '(')
+            {
+                start = prev;
+                // Find new matching close
+                end = FindMatchingClose(buffer, start);
+            }
+            else if (!isspace(*prev))
+            {
+                break;
+            }
+            else
+            {
+                --start;
+            }
+        }
+    }
+    
+    return { start, end };
+}
+```
+
+</Accordion>
+
+## Complete Example
+
+<Accordion title="Simple Calculator REPL">
+
+```cpp
+#include "zep/mode_repl.h"
+#include <sstream>
+#include <cmath>
+
+class CalculatorRepl : public IZepReplProvider
+{
+public:
+    std::string ReplParse(const std::string& text) override
+    {
+        try
+        {
+            // Simple expression evaluator
+            double result = EvaluateExpression(text);
+            return std::to_string(result);
+        }
+        catch (const std::exception& e)
+        {
+            return std::string("Error: ") + e.what();
+        }
+    }
+    
+    bool ReplIsFormComplete(
+        const std::string& input,
+        int& depth) override
+    {
+        // For calculator, each line is complete
+        // Check for balanced parentheses
+        depth = 0;
+        for (char c : input)
+        {
+            if (c == '(') depth++;
+            if (c == ')') depth--;
+        }
+        return depth == 0;
+    }
+    
+private:
+    double EvaluateExpression(const std::string& expr)
+    {
+        // Simple recursive descent parser for math expressions
+        // Supports: +, -, *, /, (), numbers
+        // Left as exercise - use a real expression parser
+        return 42.0; // Placeholder
+    }
+};
+
+// Usage:
+void SetupCalculatorRepl(ZepEditor& editor)
+{
+    auto* calc = new CalculatorRepl();
+    
+    ZepReplExCommand::Register(editor, calc);
+    ZepReplEvaluateCommand::Register(editor, calc);
+    
+    // Now users can press Ctrl+E to open calculator REPL
+}
+```
+
+</Accordion>
+
+## Buffer Configuration
+
+<Accordion title="REPL Buffer Setup">
+
+From `src/mode_repl.cpp:115-126`, REPL buffers are configured specially:
+
+```cpp
+// REPL buffer is modifiable but not directly saveable
+m_pReplBuffer = editor.GetEmptyBuffer("Repl.lisp");
+m_pReplBuffer->SetBufferType(BufferType::Repl);
+
+// Disable line highlighting for cleaner output
+m_pReplBuffer->GetSyntax()->IgnoreLineHighlight();
+
+// Set up key handler
+m_pReplBuffer->SetPostKeyNotifier([&](uint32_t key, uint32_t modifier) {
+    return AddKeyPress(key, modifier);
+});
+
+// Add to window
+m_pReplWindow = editor.GetActiveTabWindow()->AddWindow(
+    m_pReplBuffer, 
+    nullptr, 
+    RegionLayoutType::VBox
+);
+```
+
+</Accordion>
+
+## Implementation Reference
+
+The REPL system is defined in:
+- `include/zep/mode_repl.h:11-157` - REPL interfaces and commands
+- `src/mode_repl.cpp` - REPL implementation
+
+<Tip>
+  For Lisp-like languages, consider using the `ZepSyntaxFlags::LispLike` flag when creating the syntax provider to enable proper S-expression handling.
+</Tip>
+
+## Related
+
+<Card title="Syntax Extensions" icon="code" href="/guides/syntax-extensions">
+  Add syntax highlighting for your REPL language
+</Card>
+
+<Card title="Keymapping" icon="keyboard" href="/guides/keymapping">
+  Customize REPL keybindings
+</Card>

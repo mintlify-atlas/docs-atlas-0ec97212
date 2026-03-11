@@ -1,0 +1,398 @@
+---
+title: CMake Library Integration
+description: Build and install Zep as a library for production applications
+---
+
+Integrating Zep as a CMake library provides the best build performance and is ideal for production applications. This approach builds Zep separately and links it to your project.
+
+## Overview
+
+The CMake library approach involves:
+
+1. Building and installing Zep on your system
+2. Using `find_package()` to locate Zep in your project
+3. Linking against the installed library
+
+## Installation
+
+<Steps>
+  <Step title="Clone the Repository">
+    Get the Zep source code:
+    
+    ```bash
+    git clone https://github.com/Rezonality/zep
+    cd zep
+    git submodule update --init
+    ```
+  </Step>
+  
+  <Step title="Configure Build Options">
+    Create a build directory and configure with CMake:
+    
+    <CodeGroup>
+    ```bash Linux/macOS
+    mkdir build && cd build
+    cmake -G "Unix Makefiles" \
+      -DBUILD_IMGUI=OFF \
+      -DBUILD_TESTS=OFF \
+      -DBUILD_DEMOS=OFF \
+      -DCMAKE_BUILD_TYPE=Release \
+      ..
+    ```
+    
+    ```batch Windows
+    mkdir build
+    cd build
+    cmake -G "Visual Studio 17 2022" ^
+      -DBUILD_IMGUI=OFF ^
+      -DBUILD_TESTS=OFF ^
+      -DBUILD_DEMOS=OFF ^
+      -DCMAKE_BUILD_TYPE=Release ^
+      ..
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Build and Install">
+    Build the library and install it to your system:
+    
+    ```bash
+    cmake --build . --config Release --target install
+    ```
+    
+    This installs:
+    - Headers to `${CMAKE_INSTALL_PREFIX}/include/zep/`
+    - Library to `${CMAKE_INSTALL_PREFIX}/lib/`
+    - CMake config files to `${CMAKE_INSTALL_PREFIX}/lib/cmake/zep/`
+  </Step>
+</Steps>
+
+<Note>
+  On Linux/macOS, you may need `sudo` for the install step if installing to system directories. Alternatively, specify `-DCMAKE_INSTALL_PREFIX=/path/to/local` to install locally.
+</Note>
+
+## Build Options
+
+Zep provides several CMake options to control what gets built:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `BUILD_QT` | `OFF` | Build Qt rendering backend |
+| `BUILD_IMGUI` | `OFF` | Build ImGui rendering backend |
+| `BUILD_DEMOS` | `ON` | Build demo applications |
+| `BUILD_TESTS` | `ON` | Build unit tests |
+| `ZEP_FEATURE_CPP_FILE_SYSTEM` | `ON` | Enable C++17 filesystem support |
+
+### Library-Only Build
+
+For integration purposes, you typically want a minimal build:
+
+```bash
+cmake -DBUILD_IMGUI=OFF -DBUILD_TESTS=OFF -DBUILD_DEMOS=OFF ..
+```
+
+### With ImGui Backend
+
+If you need the ImGui backend pre-built:
+
+```bash
+cmake -DBUILD_IMGUI=ON -DBUILD_TESTS=OFF -DBUILD_DEMOS=OFF ..
+```
+
+### With Qt Backend
+
+For Qt applications:
+
+```bash
+cmake -DBUILD_QT=ON -DBUILD_TESTS=OFF -DBUILD_DEMOS=OFF ..
+```
+
+<Note>
+  Building with `BUILD_DEMOS=ON` requires additional dependencies (SDL2, OpenGL, etc.). For library-only builds, keep this option off.
+</Note>
+
+## Using Zep in Your Project
+
+Once installed, integrating Zep into your CMake project is straightforward.
+
+### Basic Integration
+
+```cmake CMakeLists.txt
+cmake_minimum_required(VERSION 3.2)
+project(MyZepApp)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Find the installed Zep package
+find_package(Zep REQUIRED)
+
+# Your executable
+add_executable(myapp
+    src/main.cpp
+    src/editor_window.cpp
+)
+
+# Link against Zep
+target_link_libraries(myapp PRIVATE Zep::Zep)
+```
+
+That's it! CMake will automatically:
+- Find the Zep headers and add them to your include path
+- Link the Zep library
+- Configure all necessary compiler settings
+
+### Custom Install Location
+
+If you installed Zep to a custom location, tell CMake where to find it:
+
+```cmake
+set(CMAKE_PREFIX_PATH "/path/to/zep/install" ${CMAKE_PREFIX_PATH})
+find_package(Zep REQUIRED)
+```
+
+Or set it via command line:
+
+```bash
+cmake -DCMAKE_PREFIX_PATH=/path/to/zep/install ..
+```
+
+## Complete Example
+
+Here's a complete example showing how to use the installed Zep library:
+
+### Project Structure
+
+```
+myproject/
+├── CMakeLists.txt
+└── src/
+    └── main.cpp
+```
+
+### CMakeLists.txt
+
+```cmake CMakeLists.txt
+cmake_minimum_required(VERSION 3.2)
+project(ZepExample VERSION 1.0.0)
+
+# C++17 required for Zep
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Find packages
+find_package(Zep REQUIRED)
+
+# If using ImGui, you'll also need to find it
+# find_package(imgui REQUIRED)
+
+# Create executable
+add_executable(zep_example
+    src/main.cpp
+)
+
+# Link libraries
+target_link_libraries(zep_example 
+    PRIVATE 
+    Zep::Zep
+    # Add your other dependencies (imgui, Qt, etc.)
+)
+
+# Optional: Enable warnings
+if(MSVC)
+    target_compile_options(zep_example PRIVATE /W4)
+else()
+    target_compile_options(zep_example PRIVATE -Wall -Wextra)
+endif()
+```
+
+### main.cpp
+
+```cpp src/main.cpp
+#include <zep/editor.h>
+#include <zep/mode_vim.h>
+#include <zep/mode_standard.h>
+#include <zep/tab_window.h>
+#include <zep/window.h>
+
+// Include your display backend
+#include <zep/imgui/editor_imgui.h>
+#include <zep/imgui/display_imgui.h>
+
+#include <imgui.h>
+
+using namespace Zep;
+
+int main()
+{
+    // Initialize your windowing/graphics system
+    // ...
+    
+    // Create Zep editor
+    auto pixelScale = NVec2f(1.0f, 1.0f);
+    ZepEditor_ImGui editor("/path/to/config", pixelScale);
+    
+    // Load a file or create a buffer
+    editor.InitWithText("example.cpp", "// Hello, Zep!\n");
+    
+    // Set editing mode
+    editor.SetGlobalMode(ZepMode_Vim::StaticName());
+    // or: editor.SetGlobalMode(ZepMode_Standard::StaticName());
+    
+    // Main loop
+    while (running)
+    {
+        ImGui::NewFrame();
+        
+        ImGui::Begin("Zep Editor");
+        
+        // Get the region for the editor
+        auto min = ImGui::GetCursorScreenPos();
+        auto max = ImGui::GetContentRegionAvail();
+        
+        // Set display region
+        editor.SetDisplayRegion(
+            NVec2f(min.x, min.y),
+            NVec2f(min.x + max.x, min.y + max.y)
+        );
+        
+        // Display and handle input
+        editor.Display();
+        editor.HandleInput();
+        
+        ImGui::End();
+        
+        ImGui::Render();
+        // Present frame...
+    }
+    
+    return 0;
+}
+```
+
+## Building Your Project
+
+<Steps>
+  <Step title="Configure">
+    ```bash
+    mkdir build && cd build
+    cmake ..
+    ```
+  </Step>
+  
+  <Step title="Build">
+    ```bash
+    cmake --build . --config Release
+    ```
+  </Step>
+  
+  <Step title="Run">
+    ```bash
+    ./zep_example
+    ```
+  </Step>
+</Steps>
+
+## Advanced Configuration
+
+### Custom Zep Configuration
+
+You can customize Zep's behavior through CMake definitions:
+
+```cmake
+target_compile_definitions(myapp PRIVATE
+    ZEP_FEATURE_CPP_FILE_SYSTEM=1
+)
+```
+
+### Using Zep as a Submodule
+
+If you prefer not to install Zep system-wide, you can add it as a submodule:
+
+```cmake CMakeLists.txt
+# Add Zep as a subdirectory
+add_subdirectory(external/zep)
+
+# Create your executable
+add_executable(myapp src/main.cpp)
+
+# Link against Zep
+target_link_libraries(myapp PRIVATE Zep::Zep)
+```
+
+This builds Zep as part of your project without installation.
+
+## Installed Files
+
+After installation, Zep provides:
+
+### Headers
+
+```
+${CMAKE_INSTALL_PREFIX}/include/zep/
+├── buffer.h
+├── editor.h
+├── mode.h
+├── mode_vim.h
+├── mode_standard.h
+├── window.h
+├── tab_window.h
+├── imgui/
+│   ├── display_imgui.h
+│   └── editor_imgui.h
+└── qt/
+    ├── zepdisplay_qt.h
+    └── zepwidget_qt.h
+```
+
+### CMake Config Files
+
+```
+${CMAKE_INSTALL_PREFIX}/lib/cmake/zep/
+├── zep-config.cmake
+├── zep-config-version.cmake
+└── zep-targets.cmake
+```
+
+These files enable `find_package(Zep)` to work automatically.
+
+## Troubleshooting
+
+### CMake Can't Find Zep
+
+**Problem:** `find_package(Zep)` fails
+
+**Solutions:**
+1. Set `CMAKE_PREFIX_PATH`: `cmake -DCMAKE_PREFIX_PATH=/path/to/install ..`
+2. Check install location: `find /usr -name "zep-config.cmake" 2>/dev/null`
+3. Verify installation: `cmake --build . --target install` completed successfully
+
+### Link Errors
+
+**Problem:** Undefined references to Zep symbols
+
+**Solutions:**
+1. Ensure you're linking: `target_link_libraries(myapp PRIVATE Zep::Zep)`
+2. Check that Zep was built with the same compiler
+3. Verify C++ standard matches (both should use C++17)
+
+### Header Not Found
+
+**Problem:** `#include <zep/editor.h>` not found
+
+**Solution:** Make sure you're using the `Zep::Zep` target, which automatically adds include directories:
+```cmake
+target_link_libraries(myapp PRIVATE Zep::Zep)  # Correct
+# Don't manually add include directories
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="ImGui Integration" icon="gamepad" href="/integration/imgui">
+    Learn how to integrate Zep with ImGui
+  </Card>
+  <Card title="Qt Integration" icon="window" href="/integration/qt">
+    Learn how to integrate Zep with Qt
+  </Card>
+</CardGroup>

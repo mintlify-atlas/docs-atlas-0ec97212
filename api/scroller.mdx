@@ -1,0 +1,335 @@
+---
+title: Scroller
+description: Scrollbar widget for viewport navigation and visual scrolling feedback
+---
+
+## Overview
+
+The `Scroller` class provides a visual scrollbar component that displays scroll position and allows users to navigate through editor content. It handles mouse interactions for clicking arrows, dragging the thumb, and page up/down operations.
+
+## Class Definition
+
+```cpp
+class Scroller : public ZepComponent
+{
+public:
+    Scroller(ZepEditor& editor, Region& parent);
+    
+    virtual void Display(ZepTheme& theme);
+    virtual void Notify(std::shared_ptr<ZepMessage> message) override;
+    
+    // Scroll properties
+    float vScrollVisiblePercent = 1.0f;
+    float vScrollPosition = 0.0f;
+    float vScrollLinePercent = 0.0f;
+    float vScrollPagePercent = 0.0f;
+    bool vertical = true;
+};
+```
+
+## Constructor
+
+```cpp
+Scroller(ZepEditor& editor, Region& parent);
+```
+
+**Parameters:**
+- `editor` - Reference to the parent `ZepEditor` instance
+- `parent` - Reference to the parent `Region` that contains this scroller
+
+**Example:**
+```cpp
+Scroller scroller(editor, parentRegion);
+```
+
+## Public Members
+
+### vScrollVisiblePercent
+
+The percentage of content visible in the viewport.
+
+```cpp
+float vScrollVisiblePercent = 1.0f;
+```
+
+**Range:** 0.0 to 1.0
+- `1.0` means all content is visible (no scrolling needed)
+- `0.5` means 50% of content is visible
+- Smaller values indicate more content to scroll through
+
+**Example:**
+```cpp
+scroller.vScrollVisiblePercent = 0.25f;  // 25% of document visible
+```
+
+### vScrollPosition
+
+The current scroll position as a percentage of total scrollable area.
+
+```cpp
+float vScrollPosition = 0.0f;
+```
+
+**Range:** 0.0 to 1.0
+- `0.0` means scrolled to the top
+- `1.0` means scrolled to the bottom
+- `0.5` means scrolled to the middle
+
+**Example:**
+```cpp
+// Scroll to middle of document
+scroller.vScrollPosition = 0.5f;
+```
+
+### vScrollLinePercent
+
+The percentage of the viewport that one line represents.
+
+```cpp
+float vScrollLinePercent = 0.0f;
+```
+
+Used to determine scroll distance when clicking arrow buttons. A value of `0.05` means each line is 5% of the viewport height.
+
+**Example:**
+```cpp
+scroller.vScrollLinePercent = 1.0f / totalLines;
+```
+
+### vScrollPagePercent
+
+The percentage of the viewport that one page represents.
+
+```cpp
+float vScrollPagePercent = 0.0f;
+```
+
+Used to determine scroll distance for page up/down operations. Typically set to match `vScrollVisiblePercent`.
+
+**Example:**
+```cpp
+scroller.vScrollPagePercent = scroller.vScrollVisiblePercent;
+```
+
+### vertical
+
+Whether this is a vertical or horizontal scrollbar.
+
+```cpp
+bool vertical = true;
+```
+
+**Values:**
+- `true` - Vertical scrollbar (default)
+- `false` - Horizontal scrollbar
+
+## Methods
+
+### Display
+
+Renders the scrollbar using the provided theme.
+
+```cpp
+virtual void Display(ZepTheme& theme);
+```
+
+**Parameters:**
+- `theme` - Theme to use for rendering the scrollbar
+
+This method is called automatically during the editor's render loop. It draws:
+- Up/down arrow buttons
+- Scrollbar track
+- Draggable thumb indicator
+
+### Notify
+
+Handles messages from the editor system, particularly mouse events.
+
+```cpp
+virtual void Notify(std::shared_ptr<ZepMessage> message) override;
+```
+
+**Parameters:**
+- `message` - Message containing event information
+
+Processes mouse events for:
+- Clicking up/down arrows
+- Clicking track for page up/down
+- Dragging the thumb
+- Releasing mouse button
+
+## Usage Example
+
+### Basic Setup
+
+```cpp
+// Create editor and window
+ZepEditor editor(display);
+ZepWindow& window = editor.GetActiveWindow();
+
+// Create scroller for the window region
+Scroller scroller(editor, window.GetWindowRegion());
+
+// Configure scroll parameters
+int totalLines = buffer.GetLineCount();
+int visibleLines = window.GetVisibleLineCount();
+
+scroller.vScrollVisiblePercent = 
+    static_cast<float>(visibleLines) / totalLines;
+    
+scroller.vScrollLinePercent = 1.0f / totalLines;
+scroller.vScrollPagePercent = scroller.vScrollVisiblePercent;
+
+// Update scroll position
+int firstVisibleLine = window.GetFirstVisibleLine();
+scroller.vScrollPosition = 
+    static_cast<float>(firstVisibleLine) / (totalLines - visibleLines);
+
+// Render
+scroller.Display(editor.GetTheme());
+```
+
+### Horizontal Scrollbar
+
+```cpp
+Scroller hScroller(editor, parentRegion);
+hScroller.vertical = false;
+
+// Configure for horizontal scrolling
+int maxLineWidth = buffer.GetLongestLineWidth();
+int visibleWidth = window.GetVisibleWidth();
+
+hScroller.vScrollVisiblePercent = 
+    static_cast<float>(visibleWidth) / maxLineWidth;
+    
+hScroller.vScrollPosition = 
+    static_cast<float>(window.GetScrollX()) / 
+    (maxLineWidth - visibleWidth);
+```
+
+### Responding to Scroll Changes
+
+```cpp
+class MyWindow : public ZepWindow
+{
+    Scroller m_scroller;
+    
+public:
+    void UpdateScroll()
+    {
+        // Update scroller state based on window
+        int totalLines = GetBuffer().GetLineCount();
+        int visibleLines = GetVisibleLineCount();
+        int firstLine = GetFirstVisibleLine();
+        
+        m_scroller.vScrollVisiblePercent = 
+            static_cast<float>(visibleLines) / totalLines;
+            
+        m_scroller.vScrollPosition = 
+            static_cast<float>(firstLine) / (totalLines - visibleLines);
+    }
+    
+    void OnScrollerChanged()
+    {
+        // Update window based on scroller position
+        int totalLines = GetBuffer().GetLineCount();
+        int visibleLines = GetVisibleLineCount();
+        
+        int targetLine = static_cast<int>(
+            m_scroller.vScrollPosition * (totalLines - visibleLines));
+            
+        ScrollToLine(targetLine);
+    }
+};
+```
+
+## Scroll Calculations
+
+### Thumb Size
+
+The visible thumb size represents how much content is visible:
+
+```cpp
+float thumbSize = scrollbarHeight * vScrollVisiblePercent;
+```
+
+### Thumb Position
+
+The thumb position shows where you are in the document:
+
+```cpp
+float scrollableHeight = scrollbarHeight * (1.0f - vScrollVisiblePercent);
+float thumbY = scrollableHeight * vScrollPosition;
+```
+
+### Converting Position to Line
+
+To convert scroll position to a line number:
+
+```cpp
+int totalLines = buffer.GetLineCount();
+int visibleLines = window.GetVisibleLineCount();
+int scrollableLines = totalLines - visibleLines;
+
+int targetLine = static_cast<int>(vScrollPosition * scrollableLines);
+```
+
+## Internal Details
+
+The scroller maintains several private regions and state:
+
+### Private Members
+
+```cpp
+private:
+    std::shared_ptr<Region> m_region;              // Main scrollbar region
+    std::shared_ptr<Region> m_topButtonRegion;     // Up arrow button
+    std::shared_ptr<Region> m_bottomButtonRegion;  // Down arrow button
+    std::shared_ptr<Region> m_mainRegion;          // Scrollable track area
+    
+    timer m_start_delay_timer;   // Delay before auto-repeat
+    timer m_reclick_timer;       // Auto-repeat interval
+    
+    enum class ScrollState
+    {
+        None,
+        ScrollDown,
+        ScrollUp,
+        PageUp,
+        PageDown,
+        Drag
+    };
+    ScrollState m_scrollState = ScrollState::None;
+    
+    NVec2f m_mouseDownPos;       // Where mouse was pressed
+    float m_mouseDownPercent;    // Scroll position at mouse down
+```
+
+### Private Methods
+
+- `CheckState()` - Updates scroll state based on timers and mouse position
+- `ClickUp()` - Handles clicking the up arrow
+- `ClickDown()` - Handles clicking the down arrow
+- `PageUp()` - Scrolls up one page
+- `PageDown()` - Scrolls down one page
+- `DoMove(NVec2f pos)` - Handles thumb dragging
+- `ThumbSize()` - Calculates thumb size in pixels
+- `ThumbExtra()` - Extra space available for scrolling
+- `ThumbRect()` - Returns the thumb's bounding rectangle
+
+## Integration with ZepComponent
+
+The `Scroller` inherits from `ZepComponent`, giving it access to:
+
+- Message handling through `Notify()`
+- Parent-child region hierarchy
+- Editor reference
+- Theme-based rendering
+
+See `include/zep/scroller.h:12` for the complete definition.
+
+## See Also
+
+- [ZepWindow](/api/window) - Editor window that uses scrollers
+- [ZepTheme](/api/theme) - Theme system for rendering
+- [ZepDisplay](/api/display) - Display abstraction

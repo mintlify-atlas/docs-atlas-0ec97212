@@ -1,0 +1,536 @@
+---
+title: Syntax Extensions  
+description: Add syntax highlighting for new languages by implementing custom syntax providers
+---
+
+Zep's syntax highlighting system is extensible, allowing you to add support for new languages or create custom syntax highlighting schemes. The system uses the `ZepSyntax` class as a base for all syntax providers.
+
+## ZepSyntax Overview
+
+The `ZepSyntax` class provides the foundation for syntax highlighting:
+
+<Note>
+  Zep includes built-in syntax support for C/C++, GLSL, HLSL, Lua, Python, SQL, CMake, Janet, Lisp, and Markdown. You can add support for additional languages by extending `ZepSyntax`.
+</Note>
+
+## Basic Syntax Provider
+
+<Accordion title="Simple Keyword-Based Highlighting">
+
+The simplest way to add a new language is to define its keywords and identifiers:
+
+```cpp
+#include "zep/syntax.h"  
+#include <unordered_set>
+
+// Define language keywords and identifiers
+static std::unordered_set<std::string> my_keywords = {
+    "if", "else", "while", "for", "return",
+    "function", "var", "let", "const",
+    "true", "false", "null"
+};
+
+static std::unordered_set<std::string> my_identifiers = {
+    "print", "println", "len", "append",
+    "String", "Array", "Map", "Object"
+};
+
+// Create syntax provider
+auto syntax = std::make_shared<ZepSyntax>(
+    buffer,
+    my_keywords,
+    my_identifiers,
+    ZepSyntaxFlags::CaseInsensitive  // Optional flags
+);
+
+buffer.SetSyntaxProvider(syntax);
+```
+
+### Syntax Flags
+
+```cpp
+namespace ZepSyntaxFlags
+{
+    enum
+    {
+        CaseInsensitive = (1 << 0),      // Keywords not case-sensitive
+        IgnoreLineHighlight = (1 << 1),  // Don't highlight current line
+        LispLike = (1 << 2)              // Enable S-expression support
+    };
+};
+```
+
+</Accordion>
+
+## Built-in Language Support
+
+<Accordion title="Pre-defined Language Sets">
+
+From `src/syntax_providers.cpp`, Zep includes keyword sets for many languages:
+
+### C/C++ (lines 13-26)
+```cpp
+static std::unordered_set<std::string> cpp_keywords = {
+    "alignas", "alignof", "auto", "bool", "break", "case",
+    "catch", "char", "class", "const", "constexpr", 
+    "continue", "default", "delete", "do", "double",
+    "else", "enum", "explicit", "extern", "false",
+    "float", "for", "friend", "goto", "if", "inline",
+    "int", "long", "namespace", "new", "operator",
+    "private", "protected", "public", "return",
+    "short", "signed", "sizeof", "static", "struct",
+    "switch", "template", "this", "throw", "true",
+    "try", "typedef", "typename", "union", "unsigned",
+    "virtual", "void", "volatile", "while",
+    // ... and more
+};
+```
+
+### Python (lines 142-148)
+```cpp
+static std::unordered_set<std::string> py_keywords = {
+    "for", "in", "fn", "def", "range", "import",
+    "from", "int", "float", "vec2", "vec3", "vec4"
+};
+
+static std::unordered_set<std::string> py_identifiers = {
+    "math", "sin", "cos", "circle", "bezier",
+    "line", "text"
+};
+```
+
+### Janet (lines 129-136)
+```cpp
+static std::unordered_set<std::string> janet_keywords = {
+    "if", "do", "fn", "while", "def", "var",
+    "quote", "quasiquote", "unquote", "splice",
+    "set", "break"
+};
+
+static std::unordered_set<std::string> janet_identifiers = {
+    "%", "*", "+", "-", "/", "<", "<=", "=", ">", ">=",
+    "apply", "array", "map", "filter", "print",
+    // ... extensive Janet standard library
+};
+```
+
+</Accordion>
+
+## Custom Syntax Provider
+
+<Accordion title="Extending ZepSyntax">
+
+For advanced syntax highlighting, extend the `ZepSyntax` class:
+
+```cpp
+#include "zep/syntax.h"
+
+class MyLanguageSyntax : public ZepSyntax
+{
+public:
+    MyLanguageSyntax(
+        ZepBuffer& buffer,
+        const std::unordered_set<std::string>& keywords = {},
+        const std::unordered_set<std::string>& identifiers = {})
+        : ZepSyntax(buffer, keywords, identifiers, 0)
+    {
+    }
+    
+    virtual SyntaxResult GetSyntaxAt(
+        const GlyphIterator& offset) const override
+    {
+        // Get base syntax info (keywords, comments, strings, numbers)
+        SyntaxResult result = ZepSyntax::GetSyntaxAt(offset);
+        
+        // Customize based on context
+        // Example: Highlight function calls differently
+        if (IsFunctionCall(offset))
+        {
+            result.foreground = ThemeColor::Identifier;
+            result.underline = false;
+        }
+        
+        // Example: Highlight decorators/annotations
+        if (IsDecorator(offset))
+        {
+            result.foreground = ThemeColor::Number;  // Use any theme color
+        }
+        
+        return result;
+    }
+    
+    virtual void UpdateSyntax() override
+    {
+        // Custom syntax analysis
+        // The base class handles comments, strings, numbers
+        ZepSyntax::UpdateSyntax();
+        
+        // Add custom syntax markers
+        AnalyzeFunctions();
+        AnalyzeTypes();
+    }
+    
+private:
+    bool IsFunctionCall(const GlyphIterator& offset) const
+    {
+        // Check if offset is at a function call
+        // Look for pattern: identifier followed by '('
+        auto next = offset;
+        
+        // Skip whitespace
+        while (next < m_buffer.End() && isspace(*next))
+            ++next;
+            
+        return (next < m_buffer.End() && *next == '(');
+    }
+    
+    bool IsDecorator(const GlyphIterator& offset) const
+    {
+        // Check for decorators (Python @decorator, Java @Annotation)
+        if (offset > m_buffer.Begin())
+        {
+            auto prev = offset - 1;
+            return *prev == '@';
+        }
+        return false;
+    }
+    
+    void AnalyzeFunctions()
+    {
+        // Scan buffer for function definitions
+        // Mark them for special highlighting
+    }
+    
+    void AnalyzeTypes()
+    {
+        // Identify type names, class names, etc.
+    }
+};
+```
+
+</Accordion>
+
+## Syntax Data Structure
+
+<Accordion title="SyntaxResult and SyntaxData">
+
+The syntax system uses these structures:
+
+```cpp
+// Basic syntax information
+struct SyntaxData
+{
+    ThemeColor foreground = ThemeColor::Normal;
+    ThemeColor background = ThemeColor::None;
+    bool underline = false;
+};
+
+// Extended result with custom colors
+struct SyntaxResult : SyntaxData  
+{
+    NVec4f customBackgroundColor;  // Override theme color
+    NVec4f customForegroundColor;  // Override theme color
+};
+```
+
+### Theme Colors
+
+Common colors for syntax highlighting:
+
+```cpp
+ThemeColor::Normal      // Default text
+ThemeColor::Keyword     // Language keywords  
+ThemeColor::Identifier  // Function/variable names
+ThemeColor::Number      // Numeric literals
+ThemeColor::String      // String literals
+ThemeColor::Comment     // Comments
+ThemeColor::Parenthesis // Brackets, parens
+ThemeColor::Error       // Errors
+ThemeColor::Warning     // Warnings
+```
+
+</Accordion>
+
+## Advanced Features
+
+<Accordion title="Syntax Adornments">
+
+Add overlays on top of base syntax:
+
+```cpp
+class MySyntaxAdorn : public ZepSyntaxAdorn
+{
+public:
+    MySyntaxAdorn(ZepSyntax& syntax, ZepBuffer& buffer)
+        : ZepSyntaxAdorn(syntax, buffer)
+    {
+    }
+    
+    virtual SyntaxResult GetSyntaxAt(
+        const GlyphIterator& offset,
+        bool& found) const override
+    {
+        SyntaxResult result;
+        found = false;
+        
+        // Check if this offset should be adorned
+        if (IsSpecialRegion(offset))
+        {
+            result.foreground = ThemeColor::Info;
+            result.background = ThemeColor::VisualSelectBackground;
+            found = true;
+        }
+        
+        return result;
+    }
+    
+private:
+    bool IsSpecialRegion(const GlyphIterator& offset) const
+    {
+        // Determine if offset is in a special region
+        // (e.g., TODO comments, URLs, regex patterns)
+        return false;
+    }
+};
+
+// Attach adornment
+auto adorn = std::make_shared<MySyntaxAdorn>(*syntax, buffer);
+syntax->AddAdornment(adorn);
+```
+
+</Accordion>
+
+<Accordion title="Multi-line Comments and Strings">
+
+The base `ZepSyntax` class handles multi-line comments automatically:
+
+```cpp
+// Comments are tracked in the syntax system
+struct CommentEntry
+{
+    bool isStart;      // Start or end of comment
+    bool isMultiLine;  // Single or multi-line
+    uint32_t location; // Buffer position
+    uint32_t entries;  // Number of comment markers
+};
+
+// Access comment information
+const std::vector<CommentEntry>& comments = syntax.GetComments();
+```
+
+The system maintains start/end positions of multi-line comments and strings, ensuring correct highlighting even when editing in the middle.
+
+</Accordion>
+
+## Complete Example
+
+<Accordion title="JSON Syntax Provider">
+
+```cpp
+#include "zep/syntax.h"
+
+class JsonSyntax : public ZepSyntax
+{
+public:
+    JsonSyntax(ZepBuffer& buffer)
+        : ZepSyntax(
+            buffer,
+            // JSON has no keywords
+            {},
+            // JSON standard values  
+            { "true", "false", "null" },
+            0)
+    {
+    }
+    
+    virtual SyntaxResult GetSyntaxAt(
+        const GlyphIterator& offset) const override
+    {
+        SyntaxResult result = ZepSyntax::GetSyntaxAt(offset);
+        
+        // Highlight object keys differently
+        if (IsObjectKey(offset))
+        {
+            result.foreground = ThemeColor::Identifier;
+        }
+        
+        // Highlight numbers
+        if (IsNumber(offset))
+        {
+            result.foreground = ThemeColor::Number;
+        }
+        
+        // Highlight structural characters
+        char c = *offset;
+        if (c == '{' || c == '}' || c == '[' || c == ']' ||
+            c == ':' || c == ',')
+        {
+            result.foreground = ThemeColor::Parenthesis;
+        }
+        
+        return result;
+    }
+    
+private:
+    bool IsObjectKey(const GlyphIterator& offset) const
+    {
+        // Check if we're in a quoted string followed by ':'
+        if (*offset == '"')
+        {
+            // Scan forward to matching quote
+            auto next = offset + 1;
+            while (next < m_buffer.End() && *next != '"')
+            {
+                if (*next == '\\')
+                    next += 2;  // Skip escaped char
+                else
+                    ++next;
+            }
+            
+            if (next < m_buffer.End())
+            {
+                ++next;  // Skip closing quote
+                
+                // Skip whitespace
+                while (next < m_buffer.End() && isspace(*next))
+                    ++next;
+                    
+                // Check for colon
+                return (next < m_buffer.End() && *next == ':');
+            }
+        }
+        return false;
+    }
+    
+    bool IsNumber(const GlyphIterator& offset) const
+    {
+        char c = *offset;
+        return (c >= '0' && c <= '9') || 
+               c == '-' || c == '+' || 
+               c == '.' || c == 'e' || c == 'E';
+    }
+};
+
+// Usage
+void SetupJsonSyntax(ZepBuffer& buffer)
+{
+    auto syntax = std::make_shared<JsonSyntax>(buffer);
+    buffer.SetSyntaxProvider(syntax);
+}
+```
+
+</Accordion>
+
+## Registering File Extensions
+
+<Accordion title="Auto-detect Syntax by Extension">
+
+Register your syntax provider for specific file extensions:
+
+```cpp
+class MyEditor
+{
+public:
+    void RegisterSyntaxProviders()
+    {
+        // Map file extensions to syntax providers
+        m_syntaxProviders[".json"] = [](ZepBuffer& buf) {
+            return std::make_shared<JsonSyntax>(buf);
+        };
+        
+        m_syntaxProviders[".toml"] = [](ZepBuffer& buf) {
+            return std::make_shared<TomlSyntax>(buf);
+        };
+        
+        m_syntaxProviders[".yml"] = [](ZepBuffer& buf) {
+            return std::make_shared<YamlSyntax>(buf);
+        };
+    }
+    
+    void OpenFile(const std::string& path)
+    {
+        auto buffer = CreateBuffer(path);
+        
+        // Extract extension
+        size_t dot = path.rfind('.');
+        if (dot != std::string::npos)
+        {
+            std::string ext = path.substr(dot);
+            
+            // Find matching provider
+            auto it = m_syntaxProviders.find(ext);
+            if (it != m_syntaxProviders.end())
+            {
+                auto syntax = it->second(*buffer);
+                buffer->SetSyntaxProvider(syntax);
+            }
+        }
+    }
+    
+private:
+    std::map<std::string, 
+             std::function<std::shared_ptr<ZepSyntax>(ZepBuffer&)>
+            > m_syntaxProviders;
+};
+```
+
+</Accordion>
+
+## Performance Considerations
+
+<Accordion title="Async Syntax Updates">
+
+Zep's syntax system runs asynchronously to avoid blocking:
+
+```cpp
+// Syntax is updated in background thread
+virtual void UpdateSyntax() override
+{
+    // This runs asynchronously
+    // Don't block for long periods
+    
+    // Process in chunks
+    const size_t CHUNK_SIZE = 1024;
+    
+    auto start = m_processedChar;
+    auto end = std::min(start + CHUNK_SIZE, m_buffer.size());
+    
+    // Analyze chunk
+    for (size_t i = start; i < end; i++)
+    {
+        // Check for interruption
+        if (m_stop)
+            return;
+            
+        AnalyzeChar(i);
+    }
+    
+    m_processedChar = end;
+}
+
+// Query progress
+long processed = syntax.GetProcessedChar();
+```
+
+<Tip>
+  For large files, implement incremental syntax analysis by processing chunks and respecting the `m_stop` flag for interruption.
+</Tip>
+
+</Accordion>
+
+## Implementation Reference
+
+The syntax system is defined in:
+- `include/zep/syntax.h:19-118` - Base syntax classes
+- `src/syntax_providers.cpp` - Built-in language definitions
+- `src/syntax.cpp` - Core syntax implementation (not shown but referenced)
+
+## Related
+
+<Card title="Theming" icon="palette" href="/guides/theming">
+  Learn how to customize syntax highlighting colors
+</Card>
+
+<Card title="REPL Integration" icon="terminal" href="/guides/repl-integration">
+  Add REPL support for your custom language
+</Card>

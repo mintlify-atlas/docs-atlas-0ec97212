@@ -1,0 +1,371 @@
+---
+title: ZepTabWindow
+description: Tab window container that manages multiple split windows and window layout
+---
+
+## Overview
+
+The `ZepTabWindow` class represents a tab container that manages one or more `ZepWindow` instances. It handles window splitting, window navigation, layout management, and active window tracking. Tab windows allow users to view multiple buffers simultaneously with split layouts.
+
+## Constructor
+
+### ZepTabWindow
+
+```cpp
+ZepTabWindow(ZepEditor& editor);
+```
+
+<ParamField path="editor" type="ZepEditor&" required>
+Reference to the parent editor
+</ParamField>
+
+Create a new tab window container.
+
+## Window Management
+
+### AddWindow
+
+```cpp
+ZepWindow* AddWindow(ZepBuffer* pBuffer, ZepWindow* pParent = nullptr, 
+                     RegionLayoutType layoutType = RegionLayoutType::HBox);
+```
+
+<ParamField path="pBuffer" type="ZepBuffer*" required>
+Buffer to display in the new window
+</ParamField>
+
+<ParamField path="pParent" type="ZepWindow*">
+Parent window for split layouts (nullptr for first window)
+</ParamField>
+
+<ParamField path="layoutType" type="RegionLayoutType">
+Layout direction:
+- `HBox`: Horizontal split (side by side)
+- `VBox`: Vertical split (top and bottom)
+</ParamField>
+
+Add a new window to the tab, optionally splitting from an existing window. Returns pointer to the created window.
+
+### RemoveWindow
+
+```cpp
+void RemoveWindow(ZepWindow* pWindow);
+```
+
+<ParamField path="pWindow" type="ZepWindow*" required>
+Window to remove
+</ParamField>
+
+Remove a window from the tab.
+
+### CloseActiveWindow
+
+```cpp
+void CloseActiveWindow();
+```
+
+Close the currently active window.
+
+### GetWindows
+
+```cpp
+const tWindows& GetWindows() const;
+```
+
+Get all windows in this tab as a `std::vector<ZepWindow*>`.
+
+## Active Window Management
+
+### SetActiveWindow
+
+```cpp
+void SetActiveWindow(ZepWindow* pBuffer);
+```
+
+<ParamField path="pBuffer" type="ZepWindow*" required>
+Window to make active
+</ParamField>
+
+Set the active window in this tab.
+
+### GetActiveWindow
+
+```cpp
+ZepWindow* GetActiveWindow() const;
+```
+
+Get the currently active window, or nullptr if none.
+
+## Window Navigation
+
+### DoMotion
+
+```cpp
+ZepWindow* DoMotion(WindowMotion motion);
+```
+
+<ParamField path="motion" type="WindowMotion" required>
+Direction to move:
+- `Left`: Navigate to window on the left
+- `Right`: Navigate to window on the right
+- `Up`: Navigate to window above
+- `Down`: Navigate to window below
+</ParamField>
+
+Navigate to an adjacent window in the specified direction. Returns the new active window, or nullptr if no window exists in that direction.
+
+## Display Management
+
+### Display
+
+```cpp
+void Display();
+```
+
+Render all windows in the tab.
+
+### SetDisplayRegion
+
+```cpp
+void SetDisplayRegion(const NRectf& region, bool force = false);
+```
+
+<ParamField path="region" type="const NRectf&" required>
+Rectangle defining the tab's display area
+</ParamField>
+
+<ParamField path="force" type="bool">
+Force layout recalculation even if region hasn't changed (default: false)
+</ParamField>
+
+Set the display region for the tab and recalculate window layouts.
+
+## Tab Properties
+
+### GetName
+
+```cpp
+std::string GetName() const;
+```
+
+Get the display name for this tab (typically the name of the active buffer).
+
+## Layout System
+
+The tab window uses a region-based layout system:
+
+<Expandable title="Region Layout Types">
+```cpp
+enum class RegionLayoutType
+{
+    HBox,  // Horizontal layout (left to right)
+    VBox   // Vertical layout (top to bottom)
+};
+```
+
+- **Root Region**: The top-level region containing all windows
+- **Split Regions**: Created when windows are split
+- **Window Regions**: Individual regions for each window
+
+The layout system automatically resizes windows to fill available space.
+</Expandable>
+
+## Window Regions Mapping
+
+Internal mapping between windows and their display regions:
+
+```cpp
+using tWindowRegions = std::map<ZepWindow*, std::shared_ptr<Region>>;
+```
+
+Each `ZepWindow` is mapped to its corresponding `Region` for layout management.
+
+## Usage Examples
+
+### Basic Tab with Single Window
+
+```cpp
+#include <zep/tab_window.h>
+#include <zep/window.h>
+#include <zep/editor.h>
+
+// Create tab window
+ZepTabWindow* pTab = editor.AddTabWindow();
+
+// Get or create a buffer
+ZepBuffer* pBuffer = editor.GetFileBuffer("main.cpp");
+
+// Add first window to the tab
+ZepWindow* pWindow = pTab->AddWindow(pBuffer);
+
+// Set as active
+pTab->SetActiveWindow(pWindow);
+
+// Display
+pTab->Display();
+```
+
+### Horizontal Split
+
+```cpp
+// Create first window
+ZepBuffer* pBuffer1 = editor.GetFileBuffer("main.cpp");
+ZepWindow* pWindow1 = pTab->AddWindow(pBuffer1);
+
+// Split horizontally (side by side)
+ZepBuffer* pBuffer2 = editor.GetFileBuffer("header.h");
+ZepWindow* pWindow2 = pTab->AddWindow(pBuffer2, pWindow1, 
+                                      RegionLayoutType::HBox);
+
+// Now pWindow1 and pWindow2 are side by side
+```
+
+### Vertical Split
+
+```cpp
+// Create first window
+ZepBuffer* pBuffer1 = editor.GetFileBuffer("main.cpp");
+ZepWindow* pWindow1 = pTab->AddWindow(pBuffer1);
+
+// Split vertically (top and bottom)
+ZepBuffer* pBuffer2 = editor.GetFileBuffer("output.txt");
+ZepWindow* pWindow2 = pTab->AddWindow(pBuffer2, pWindow1, 
+                                      RegionLayoutType::VBox);
+
+// Now pWindow1 is on top, pWindow2 is on bottom
+```
+
+### Complex Multi-Split Layout
+
+```cpp
+// Create initial window
+ZepWindow* pMain = pTab->AddWindow(editor.GetFileBuffer("main.cpp"));
+
+// Split horizontally
+ZepWindow* pHeader = pTab->AddWindow(editor.GetFileBuffer("main.h"), 
+                                     pMain, RegionLayoutType::HBox);
+
+// Split the right pane vertically
+ZepWindow* pOutput = pTab->AddWindow(editor.GetFileBuffer("output.txt"), 
+                                     pHeader, RegionLayoutType::VBox);
+
+// Result:
+// +----------+----------+
+// |          |  main.h  |
+// |  main.cpp+----------+
+// |          | output   |
+// +----------+----------+
+```
+
+### Window Navigation
+
+```cpp
+// Navigate between windows
+ZepWindow* pLeft = pTab->DoMotion(WindowMotion::Left);
+if (pLeft)
+{
+    // Successfully moved to left window
+    std::cout << "Now viewing: " << pLeft->GetBuffer().GetDisplayName();
+}
+
+ZepWindow* pDown = pTab->DoMotion(WindowMotion::Down);
+if (!pDown)
+{
+    // No window below current position
+    std::cout << "No window below";
+}
+```
+
+### Closing Windows
+
+```cpp
+// Close specific window
+ZepWindow* pWindow = pTab->GetActiveWindow();
+if (pWindow)
+{
+    pTab->RemoveWindow(pWindow);
+}
+
+// Or close the active window directly
+pTab->CloseActiveWindow();
+```
+
+### Getting Tab Information
+
+```cpp
+// Get tab name (from active buffer)
+std::string tabName = pTab->GetName();
+
+// Get all windows
+const auto& windows = pTab->GetWindows();
+std::cout << "Tab has " << windows.size() << " windows\n";
+
+// Iterate through windows
+for (ZepWindow* pWindow : windows)
+{
+    std::cout << "  - " << pWindow->GetBuffer().GetDisplayName() << "\n";
+}
+```
+
+### Setting Display Region
+
+```cpp
+// Define tab area (x, y, width, height)
+NRectf tabRect(0, 0, 1024, 768);
+pTab->SetDisplayRegion(tabRect);
+
+// Force recalculation of layout
+pTab->SetDisplayRegion(tabRect, true);
+```
+
+## Integration with ZepEditor
+
+The editor manages multiple tab windows:
+
+```cpp
+// Editor maintains a list of tabs
+const auto& tabs = editor.GetTabWindows();
+
+// Navigate between tabs
+editor.NextTabWindow();
+editor.PreviousTabWindow();
+
+// Set active tab
+editor.SetCurrentTabWindow(pTab);
+
+// Get active tab
+ZepTabWindow* pActiveTab = editor.GetActiveTabWindow();
+```
+
+## Event Handling
+
+```cpp
+virtual void Notify(std::shared_ptr<ZepMessage> message) override;
+```
+
+The tab window receives notifications about:
+- Buffer changes
+- Mouse events
+- Window state changes
+- Configuration updates
+
+## Best Practices
+
+<Expandable title="Tab Window Best Practices">
+1. **Always check for nullptr** when getting the active window
+2. **Use DoMotion** for keyboard-based window navigation
+3. **Set display region** before first display call
+4. **Clean up windows** before removing buffers
+5. **Use appropriate layout types** for the desired split direction
+6. **Consider UX** when creating complex split layouts
+</Expandable>
+
+## Performance Notes
+
+<Expandable title="Optimization Tips">
+- Layout calculation only occurs when display region changes
+- Windows share the same buffer efficiently
+- Split windows don't duplicate buffer data
+- Use `force = false` in SetDisplayRegion when possible
+- Remove unused windows to free resources
+</Expandable>

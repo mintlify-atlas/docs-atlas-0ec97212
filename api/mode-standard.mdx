@@ -1,0 +1,250 @@
+---
+title: "ZepMode_Standard"
+description: "Standard non-modal text editor mode"
+---
+
+## Overview
+
+`ZepMode_Standard` implements a standard, non-modal text editing experience similar to most modern text editors. Unlike Vim mode, this mode stays in Insert mode by default, allowing immediate text entry without mode switching.
+
+## Class Definition
+
+```cpp
+class ZepMode_Standard : public ZepMode
+```
+
+Inherits from [ZepMode](/api/mode) and provides straightforward text editing without modal behavior.
+
+### Constructor
+
+```cpp
+ZepMode_Standard(ZepEditor& editor)
+```
+
+Creates a new Standard mode instance.
+
+<ParamField path="editor" type="ZepEditor&" required>
+  Reference to the parent ZepEditor instance
+</ParamField>
+
+## Core Methods
+
+### Init
+
+```cpp
+virtual void Init() override
+```
+
+Initializes Standard mode and sets up key mappings for common editing operations.
+
+<Note>
+  Standard mode sets up conventional key bindings like Ctrl+C for copy, Ctrl+V for paste, etc.
+</Note>
+
+### Begin
+
+```cpp
+virtual void Begin(ZepWindow* pWindow) override
+```
+
+Activates Standard mode for the specified window.
+
+<ParamField path="pWindow" type="ZepWindow*" required>
+  The window to activate Standard mode in
+</ParamField>
+
+### Name
+
+```cpp
+virtual const char* Name() const override
+static const char* StaticName()
+```
+
+Returns the mode name "Standard".
+
+**Returns:** `"Standard"`
+
+### DefaultMode
+
+```cpp
+virtual EditorMode DefaultMode() const override
+```
+
+Returns the default editor mode for Standard mode (Insert mode).
+
+**Returns:** `EditorMode::Insert`
+
+<Info>
+  Unlike Vim mode which starts in Normal mode, Standard mode starts in Insert mode, allowing immediate text entry.
+</Info>
+
+## Key Characteristics
+
+### Always Insert Mode
+
+Standard mode operates primarily in `EditorMode::Insert`, meaning:
+
+- Keys immediately insert text into the buffer
+- No need to press 'i' or 'a' to start typing
+- All editing operations use modifier keys (Ctrl, Alt, Shift)
+
+### Standard Key Bindings
+
+Standard mode typically supports familiar key combinations:
+
+- **Navigation:** Arrow keys, Home, End, Page Up, Page Down
+- **Editing:** Backspace, Delete, Enter
+- **Selection:** Shift + Arrow keys
+- **Clipboard:** Ctrl+C (copy), Ctrl+X (cut), Ctrl+V (paste)
+- **Undo/Redo:** Ctrl+Z (undo), Ctrl+Y or Ctrl+Shift+Z (redo)
+- **File Operations:** Ctrl+S (save), Ctrl+O (open)
+- **Search:** Ctrl+F (find)
+
+### No Relative Line Numbers
+
+Unlike Vim mode, Standard mode uses absolute line numbering, which is more conventional for non-modal editors.
+
+## Usage Example
+
+```cpp
+#include <zep/mode_standard.h>
+#include <zep/editor.h>
+
+// Create editor
+auto editor = std::make_unique<ZepEditor>(display);
+
+// Create and register Standard mode
+auto standardMode = std::make_shared<ZepMode_Standard>(*editor);
+standardMode->Init();
+editor->RegisterMode(standardMode);
+
+// Set Standard as the active mode
+editor->SetMode(ZepMode_Standard::StaticName());
+
+// Get current window and start using Standard mode
+auto window = editor->GetActiveWindow();
+standardMode->Begin(window);
+
+// User can immediately start typing
+standardMode->AddKeyPress('H');
+standardMode->AddKeyPress('e');
+standardMode->AddKeyPress('l');
+standardMode->AddKeyPress('l');
+standardMode->AddKeyPress('o');
+
+// Use modifier keys for operations
+standardMode->AddKeyPress('z', ModifierKey::Ctrl);  // Undo
+standardMode->AddKeyPress('s', ModifierKey::Ctrl);  // Save
+```
+
+## Comparison with Vim Mode
+
+| Feature | Standard Mode | Vim Mode |
+|---------|---------------|----------|
+| Default mode | Insert | Normal |
+| Text entry | Immediate | Requires 'i', 'a', etc. |
+| Navigation | Arrow keys + modifiers | h, j, k, l, w, b, etc. |
+| Line numbers | Absolute | Relative |
+| Command mode | No | Yes (Ex mode) |
+| Visual selection | Shift + arrows | v, V |
+| Copy/Paste | Ctrl+C/V | y, p |
+
+<Info>
+  Standard mode is ideal for users who prefer conventional text editor behavior or are integrating Zep into applications where Vim keybindings might be unexpected.
+</Info>
+
+## Integration Example
+
+```cpp
+// Application with mode selection
+class MyApplication
+{
+public:
+    void SetupEditor()
+    {
+        m_editor = std::make_unique<ZepEditor>(m_display);
+        
+        // Register both modes
+        auto vimMode = std::make_shared<ZepMode_Vim>(*m_editor);
+        auto standardMode = std::make_shared<ZepMode_Standard>(*m_editor);
+        
+        vimMode->Init();
+        standardMode->Init();
+        
+        m_editor->RegisterMode(vimMode);
+        m_editor->RegisterMode(standardMode);
+        
+        // Let user choose mode
+        if (m_userPreference == "vim") {
+            m_editor->SetMode(ZepMode_Vim::StaticName());
+        } else {
+            m_editor->SetMode(ZepMode_Standard::StaticName());
+        }
+    }
+    
+    void ToggleMode()
+    {
+        auto currentMode = m_editor->GetCurrentMode();
+        if (currentMode->Name() == ZepMode_Vim::StaticName()) {
+            m_editor->SetMode(ZepMode_Standard::StaticName());
+        } else {
+            m_editor->SetMode(ZepMode_Vim::StaticName());
+        }
+    }
+    
+private:
+    std::unique_ptr<ZepEditor> m_editor;
+    ZepDisplay& m_display;
+    std::string m_userPreference;
+};
+```
+
+## Custom Key Bindings
+
+```cpp
+// Extend Standard mode with custom bindings
+class MyStandardMode : public ZepMode_Standard
+{
+public:
+    MyStandardMode(ZepEditor& editor) : ZepMode_Standard(editor) {}
+    
+    void Init() override
+    {
+        // Initialize base mappings
+        ZepMode_Standard::Init();
+        
+        // Add custom key binding: Ctrl+Shift+D to duplicate line
+        m_insertMap.AddKeyMap(
+            'd',
+            ModifierKey::Ctrl | ModifierKey::Shift,
+            StringId("DuplicateLine")
+        );
+    }
+    
+    void AddKeyPress(uint32_t key, uint32_t modifiers) override
+    {
+        // Handle custom commands
+        if (key == 'd' && 
+            (modifiers & (ModifierKey::Ctrl | ModifierKey::Shift))) {
+            DuplicateCurrentLine();
+            return;
+        }
+        
+        // Fall back to base handling
+        ZepMode_Standard::AddKeyPress(key, modifiers);
+    }
+    
+private:
+    void DuplicateCurrentLine()
+    {
+        // Implementation
+    }
+};
+```
+
+## See Also
+
+- [ZepMode](/api/mode) - Base mode class
+- [ZepMode_Vim](/api/mode-vim) - Vim modal editing mode
+- [ZepEditor](/api/editor) - Editor management
+- [ZepWindow](/api/window) - Window management

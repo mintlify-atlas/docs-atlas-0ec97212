@@ -1,0 +1,571 @@
+---
+title: Qt Integration
+description: Integrate Zep with Qt for native desktop applications
+---
+
+Zep provides full Qt integration for building native desktop applications with a powerful embedded text editor. The Qt backend uses Qt's painting system for native look and feel.
+
+## Overview
+
+The Qt integration provides:
+
+- **ZepDisplay_Qt**: Rendering backend using QPainter
+- **ZepWidget_Qt**: Ready-to-use Qt widget
+- **ZepFont_Qt**: Font management using QFont
+
+All Qt-specific code is in the `include/zep/qt/` directory.
+
+## Quick Start
+
+<Steps>
+  <Step title="Include Qt Headers">
+    Include the Qt-specific Zep headers:
+    
+    ```cpp
+    #include <zep/qt/zepwidget_qt.h>
+    #include <QApplication>
+    #include <QMainWindow>
+    ```
+  </Step>
+  
+  <Step title="Create the Widget">
+    Create a ZepWidget_Qt in your Qt application:
+    
+    ```cpp
+    using namespace Zep;
+    
+    auto* zepWidget = new ZepWidget_Qt(
+        this,                          // parent
+        qApp->applicationDirPath().toStdString(),  // config path
+        12.0f                          // font size in points
+    );
+    ```
+  </Step>
+  
+  <Step title="Add to Layout">
+    Add the widget to your window:
+    
+    ```cpp
+    setCentralWidget(zepWidget);
+    
+    // Or in a layout
+    layout->addWidget(zepWidget);
+    ```
+  </Step>
+</Steps>
+
+## Complete Working Example
+
+Here's a complete Qt application with Zep integration:
+
+### MainWindow Header
+
+```cpp mainwindow.h
+#pragma once
+
+#include <QMainWindow>
+#include <zep/mode_repl.h>
+
+class MainWindow : public QMainWindow, public Zep::IZepReplProvider
+{
+    Q_OBJECT
+
+public:
+    MainWindow();
+    ~MainWindow();
+    
+    // IZepReplProvider interface (optional)
+    virtual std::string ReplParse(
+        const std::string& str
+    ) override;
+    
+    virtual std::string ReplParse(
+        Zep::ZepBuffer& buffer,
+        const Zep::GlyphIterator& cursorOffset,
+        Zep::ReplParseType type
+    ) override;
+    
+    virtual bool ReplIsFormComplete(
+        const std::string& str,
+        int& indent
+    ) override;
+};
+```
+
+### MainWindow Implementation
+
+```cpp mainwindow.cpp
+#include "mainwindow.h"
+#include <QMenuBar>
+#include <QMenu>
+
+#include <zep/qt/zepwidget_qt.h>
+#include <zep/mode_vim.h>
+#include <zep/mode_standard.h>
+#include <zep/theme.h>
+
+using namespace Zep;
+
+const std::string sampleCode = R"(
+#include <iostream>
+
+int main() {
+    std::cout << "Hello, Zep!" << std::endl;
+    return 0;
+}
+)";
+
+MainWindow::MainWindow()
+{
+    setWindowTitle("Zep Qt Editor");
+    
+    // Create Zep widget
+    auto* pWidget = new ZepWidget_Qt(
+        this,
+        qApp->applicationDirPath().toStdString(),
+        14.0f  // Font size
+    );
+    
+    // Load initial content
+    pWidget->GetEditor().InitWithText("main.cpp", sampleCode);
+    
+    // Set editing mode
+    pWidget->GetEditor().SetGlobalMode(
+        ZepMode_Vim::StaticName()
+    );
+    
+    // Create menu bar
+    auto menu = new QMenuBar();
+    
+    // Settings menu
+    auto pSettings = menu->addMenu("Settings");
+    {
+        // Editor mode submenu
+        auto pMode = pSettings->addMenu("Editor Mode");
+        {
+            auto pVim = pMode->addAction("Vim");
+            auto pStandard = pMode->addAction("Standard");
+            
+            pVim->setCheckable(true);
+            pStandard->setCheckable(true);
+            pVim->setChecked(true);
+            
+            connect(pVim, &QAction::triggered, this, 
+                [pWidget, pVim, pStandard]() {
+                    pVim->setChecked(true);
+                    pStandard->setChecked(false);
+                    pWidget->GetEditor().SetGlobalMode(
+                        ZepMode_Vim::StaticName()
+                    );
+                }
+            );
+            
+            connect(pStandard, &QAction::triggered, this,
+                [pWidget, pStandard, pVim]() {
+                    pVim->setChecked(false);
+                    pStandard->setChecked(true);
+                    pWidget->GetEditor().SetGlobalMode(
+                        ZepMode_Standard::StaticName()
+                    );
+                }
+            );
+        }
+        
+        // Theme submenu
+        auto pTheme = pSettings->addMenu("Theme");
+        {
+            auto pDark = pTheme->addAction("Dark");
+            auto pLight = pTheme->addAction("Light");
+            
+            pDark->setCheckable(true);
+            pLight->setCheckable(true);
+            pDark->setChecked(true);
+            
+            connect(pDark, &QAction::triggered, this,
+                [pWidget, pDark, pLight]() {
+                    pDark->setChecked(true);
+                    pLight->setChecked(false);
+                    pWidget->GetEditor().GetTheme().SetThemeType(
+                        ThemeType::Dark
+                    );
+                }
+            );
+            
+            connect(pLight, &QAction::triggered, this,
+                [pWidget, pLight, pDark]() {
+                    pDark->setChecked(false);
+                    pLight->setChecked(true);
+                    pWidget->GetEditor().GetTheme().SetThemeType(
+                        ThemeType::Light
+                    );
+                }
+            );
+        }
+    }
+    
+    setMenuBar(menu);
+    setCentralWidget(pWidget);
+    
+    // Set window size
+    resize(1280, 720);
+}
+
+MainWindow::~MainWindow()
+{
+}
+
+// REPL implementation (optional)
+std::string MainWindow::ReplParse(const std::string& str)
+{
+    return "REPL: " + str;
+}
+
+std::string MainWindow::ReplParse(
+    ZepBuffer& buffer,
+    const GlyphIterator& cursorOffset,
+    ReplParseType type
+)
+{
+    return "REPL evaluation not implemented";
+}
+
+bool MainWindow::ReplIsFormComplete(const std::string& str, int& indent)
+{
+    // Simple parenthesis matching
+    int count = 0;
+    for (auto& ch : str) {
+        if (ch == '(') count++;
+        if (ch == ')') count--;
+    }
+    
+    if (count < 0) {
+        indent = -1;
+        return false;
+    }
+    
+    indent = count;
+    return count == 0;
+}
+```
+
+### Main Application
+
+```cpp main.cpp
+#include <QApplication>
+#include "mainwindow.h"
+
+int main(int argc, char** argv)
+{
+    QApplication app(argc, argv);
+    
+    MainWindow mainWin;
+    mainWin.show();
+    
+    return app.exec();
+}
+```
+
+### CMakeLists.txt for Qt
+
+```cmake CMakeLists.txt
+cmake_minimum_required(VERSION 3.2)
+project(ZepQtDemo)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Qt setup
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
+find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets)
+find_package(Zep REQUIRED)
+
+add_executable(zep_qt_demo
+    main.cpp
+    mainwindow.cpp
+    mainwindow.h
+)
+
+target_link_libraries(zep_qt_demo
+    PRIVATE
+    Zep::Zep
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+)
+```
+
+## Font Configuration
+
+Zep automatically uses monospace fonts appropriate for your platform:
+
+```cpp
+// From zepdisplay_qt.h - automatic font selection
+void ZepFont_Qt::SetPixelHeight(int val)
+{
+#ifdef __APPLE__
+    m_font = QFont("Menlo");
+#else
+    m_font = QFont("Consolas");
+#endif
+    m_font.setStyleHint(QFont::Monospace);
+    m_font.setPixelSize(val);
+}
+```
+
+### Custom Fonts
+
+To use a custom font:
+
+```cpp
+auto& display = static_cast<ZepDisplay_Qt&>(
+    widget->GetEditor().GetDisplay()
+);
+
+auto customFont = std::make_shared<ZepFont_Qt>(
+    display,
+    "/path/to/font.ttf",
+    14  // pixel height
+);
+
+display.SetFont(ZepTextType::Text, customFont);
+```
+
+## Display Rendering
+
+### How ZepDisplay_Qt Works
+
+The Qt display backend uses QPainter for all rendering:
+
+```cpp
+// From zepdisplay_qt.h
+void ZepDisplay_Qt::DrawChars(
+    ZepFont& font,
+    const NVec2f& pos,
+    const NVec4f& col,
+    const uint8_t* text_begin,
+    const uint8_t* text_end
+) const
+{
+    auto& qtFont = static_cast<ZepFont_Qt&>(font);
+    m_pPainter->setFont(qtFont.GetQtFont());
+    
+    QPoint p0 = toQPoint(pos);
+    m_pPainter->setPen(
+        QColor::fromRgbF(col.x, col.y, col.z, col.w)
+    );
+    
+    m_pPainter->drawText(
+        p0.x(), 
+        p0.y() - qtFont.Descent() + GetPixelScale().y,
+        QString::fromUtf8(
+            (char*)text_begin, 
+            text_end - text_begin
+        )
+    );
+}
+```
+
+### Drawing Primitives
+
+<CodeGroup>
+```cpp Lines
+void ZepDisplay_Qt::DrawLine(
+    const NVec2f& start,
+    const NVec2f& end,
+    const NVec4f& color,
+    float width
+) const
+{
+    QPoint p0 = toQPoint(start);
+    QPoint p1 = toQPoint(end);
+    
+    m_pPainter->setPen(
+        QPen(
+            QBrush(QColor::fromRgbF(
+                color.x, color.y, color.z, color.w
+            )),
+            width
+        )
+    );
+    
+    m_pPainter->drawLine(p0, p1);
+}
+```
+
+```cpp Rectangles
+void ZepDisplay_Qt::DrawRectFilled(
+    const NRectf& rect,
+    const NVec4f& color
+) const
+{
+    QPoint start = toQPoint(rect.topLeftPx);
+    QPoint end = toQPoint(rect.bottomRightPx);
+    
+    m_pPainter->fillRect(
+        QRect(start, end),
+        QColor::fromRgbF(
+            color.x, color.y, color.z, color.w
+        )
+    );
+}
+```
+</CodeGroup>
+
+## Widget Integration
+
+The `ZepWidget_Qt` class handles all the Qt-specific integration:
+
+- **Mouse events**: Click, drag, wheel
+- **Keyboard events**: Text input, special keys
+- **Paint events**: Automatic refresh
+- **Focus handling**: Cursor blinking, selection
+
+### Custom Widget Wrapper
+
+You can create your own widget wrapper:
+
+```cpp
+class MyZepWidget : public QWidget
+{
+public:
+    MyZepWidget(QWidget* parent = nullptr)
+        : QWidget(parent)
+        , m_display(std::make_unique<ZepDisplay_Qt>())
+        , m_editor(std::make_unique<ZepEditor>(
+              m_display.get(),
+              QDir::homePath().toStdString()
+          ))
+    {
+        setFocusPolicy(Qt::StrongFocus);
+    }
+    
+protected:
+    void paintEvent(QPaintEvent* event) override
+    {
+        QPainter painter(this);
+        
+        auto& qtDisplay = static_cast<ZepDisplay_Qt&>(
+            *m_display
+        );
+        qtDisplay.SetPainter(&painter);
+        
+        m_editor->SetDisplayRegion(
+            NVec2f(0, 0),
+            NVec2f(width(), height())
+        );
+        
+        m_editor->Display();
+    }
+    
+    void keyPressEvent(QKeyEvent* event) override
+    {
+        // Handle keyboard input
+        // Convert Qt key codes to Zep key codes
+    }
+    
+    void mousePressEvent(QMouseEvent* event) override
+    {
+        m_editor->OnMouseDown(
+            NVec2f(event->x(), event->y()),
+            ZepMouseButton::Left
+        );
+        update();
+    }
+    
+private:
+    std::unique_ptr<ZepDisplay_Qt> m_display;
+    std::unique_ptr<ZepEditor> m_editor;
+};
+```
+
+## DPI Scaling
+
+Zep automatically handles high-DPI displays on Qt:
+
+```cpp
+// Get DPI scale from Qt
+QScreen* screen = QGuiApplication::primaryScreen();
+qreal dpiScale = screen->devicePixelRatio();
+
+// Pass to Zep
+auto pixelScale = NVec2f(dpiScale, dpiScale);
+```
+
+## Features
+
+<CodeGroup>
+```cpp Load Files
+auto& editor = zepWidget->GetEditor();
+
+// Load from command line
+QCommandLineParser parser;
+parser.addPositionalArgument(
+    "file", 
+    "File to open"
+);
+parser.process(*qApp);
+
+const QStringList args = parser.positionalArguments();
+if (args.size() > 0) {
+    editor.InitWithFileOrDir(
+        args[0].toStdString()
+    );
+}
+```
+
+```cpp Save Files
+auto* pBuffer = editor.GetActiveBuffer();
+if (pBuffer) {
+    // Save current buffer
+    pBuffer->Save();
+    
+    // Or save to specific path
+    pBuffer->SaveAs(
+        "/path/to/file.txt"
+    );
+}
+```
+
+```cpp Syntax Highlighting
+// Automatic based on file extension
+editor.GetFileBuffer("test.cpp");
+// Syntax highlighting automatically applied
+
+// Or set manually
+auto* pBuffer = editor.GetActiveBuffer();
+if (pBuffer) {
+    pBuffer->SetFileFlags(
+        FileFlags::Cpp
+    );
+}
+```
+</CodeGroup>
+
+## Styling
+
+You can customize the Qt widget appearance:
+
+```cpp
+// Set background color
+zepWidget->setStyleSheet(
+    "QWidget { background-color: #1e1e1e; }"
+);
+
+// Or use Zep's theme system
+auto& theme = zepWidget->GetEditor().GetTheme();
+theme.SetThemeType(ThemeType::Dark);
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Editor API" icon="code" href="/api/editor">
+    Learn about the core editor API
+  </Card>
+  <Card title="Vim Mode" icon="keyboard" href="/features/vim-mode">
+    Explore Vim keybindings
+  </Card>
+</CardGroup>

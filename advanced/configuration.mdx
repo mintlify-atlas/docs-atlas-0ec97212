@@ -1,0 +1,444 @@
+---
+title: "Configuration"
+description: "Configure Zep editor behavior and appearance using TOML configuration files"
+---
+
+## Overview
+
+Zep uses TOML (Tom's Obvious, Minimal Language) configuration files to customize editor behavior, appearance, and settings. The default configuration file is `zep.cfg`.
+
+## Configuration File Format
+
+Zep configuration files use the TOML format, which is human-readable and easy to edit:
+
+```toml
+[editor]
+show_scrollbar = 0
+style = "normal"
+show_line_numbers = true
+show_indicator_region = true
+```
+
+<Note>
+Zep uses the `cpptoml` library for parsing TOML configuration files. All standard TOML features are supported.
+</Note>
+
+## Loading Configuration
+
+### Loading from File
+
+```cpp
+#include "zep/mcommon/file/cpptoml.h"
+#include <fstream>
+
+void LoadConfig(ZepEditor& editor, const std::string& configPath)
+{
+    std::ifstream configFile(configPath);
+    if (!configFile.is_open())
+    {
+        // Handle error - config file not found
+        return;
+    }
+    
+    try
+    {
+        // Parse the TOML configuration
+        cpptoml::parser parser(configFile);
+        auto config = parser.parse();
+        
+        // Apply configuration to editor
+        ApplyConfig(editor, config);
+    }
+    catch (const cpptoml::parse_exception& e)
+    {
+        // Handle parsing error
+        std::cerr << "Config parse error: " << e.what() << std::endl;
+    }
+}
+```
+
+### Parsing Configuration Values
+
+<CodeGroup>
+
+```cpp Boolean Values
+auto editorTable = config->get_table("editor");
+if (editorTable)
+{
+    auto showLineNumbers = editorTable->get_as<bool>("show_line_numbers");
+    if (showLineNumbers)
+    {
+        bool value = *showLineNumbers;
+        // Apply setting...
+    }
+}
+```
+
+```cpp Integer Values
+auto scrollbar = editorTable->get_as<int64_t>("show_scrollbar");
+if (scrollbar)
+{
+    int value = static_cast<int>(*scrollbar);
+    // Apply setting...
+}
+```
+
+```cpp String Values
+auto style = editorTable->get_as<std::string>("style");
+if (style)
+{
+    std::string value = *style;
+    // Apply setting...
+}
+```
+
+```cpp Float Values
+auto fadeTime = editorTable->get_as<double>("background_fade_time");
+if (fadeTime)
+{
+    float value = static_cast<float>(*fadeTime);
+    // Apply setting...
+}
+```
+
+</CodeGroup>
+
+## Editor Configuration
+
+### Display Settings
+
+```toml
+[editor]
+# Scrollbar visibility
+# 0 = off, 1 = on if necessary, 2 = always on
+show_scrollbar = 0
+
+# Editor style: "normal" or "minimal"
+style = "normal"
+
+# Show line numbers in gutter
+show_line_numbers = true
+
+# Show indicator region for errors/warnings
+show_indicator_region = true
+
+# Auto-hide the command region when not in use
+autohide_command_region = false
+
+# Draw solid line highlighting current cursor line
+cursor_line_solid = true
+
+# Use abbreviated tab names
+short_tab_names = false
+```
+
+### Spacing and Margins
+
+```toml
+[editor]
+# Line spacing
+line_margin_top = 1
+line_margin_bottom = 1
+
+# Widget spacing
+widget_margin_top = 5
+widget_margin_bottom = 5
+```
+
+### Animation Settings
+
+```toml
+[editor]
+# Background fade animation duration (seconds)
+background_fade_time = 20
+
+# Wait time before fade starts (seconds)
+background_fade_wait = 5
+```
+
+## Complete Configuration Example
+
+Here's a complete `zep.cfg` file with all available settings:
+
+```toml
+[editor]
+
+# Vertical Scroller: 0 = off, 1 = on if necessary, 2 = on always
+show_scrollbar = 0 
+
+# Style: normal, or minimal for a live-coding style of editor
+style = "normal" 
+show_line_numbers = true
+show_indicator_region = true
+autohide_command_region = false
+cursor_line_solid = true
+short_tab_names = false
+
+line_margin_top = 1   
+line_margin_bottom = 1
+widget_margin_top = 5
+widget_margin_bottom = 5
+
+background_fade_time = 20
+background_fade_wait = 5
+```
+
+## Applying Configuration
+
+<Steps>
+
+### Parse the Configuration
+
+```cpp
+void ApplyConfig(ZepEditor& editor, std::shared_ptr<cpptoml::table> config)
+{
+    auto editorTable = config->get_table("editor");
+    if (!editorTable)
+    {
+        return; // No editor configuration section
+    }
+    
+    // Continue to next step...
+}
+```
+
+### Extract Settings
+
+```cpp
+void ApplyConfig(ZepEditor& editor, std::shared_ptr<cpptoml::table> config)
+{
+    auto editorTable = config->get_table("editor");
+    if (!editorTable)
+        return;
+    
+    // Extract scrollbar setting
+    auto scrollbar = editorTable->get_as<int64_t>("show_scrollbar");
+    if (scrollbar)
+    {
+        editor.SetScrollbarMode(*scrollbar);
+    }
+    
+    // Extract style setting
+    auto style = editorTable->get_as<std::string>("style");
+    if (style)
+    {
+        editor.SetStyle(*style);
+    }
+    
+    // Extract boolean flags
+    auto showLineNumbers = editorTable->get_as<bool>("show_line_numbers");
+    if (showLineNumbers && *showLineNumbers)
+    {
+        editor.SetGlobalMode(GlobalMode::ShowLineNumbers);
+    }
+}
+```
+
+### Apply to Windows
+
+```cpp
+void ApplyWindowConfig(ZepWindow& window, 
+                       std::shared_ptr<cpptoml::table> editorTable)
+{
+    uint32_t flags = window.GetWindowFlags();
+    
+    // Apply line numbers setting
+    auto showLineNumbers = editorTable->get_as<bool>("show_line_numbers");
+    if (showLineNumbers)
+    {
+        if (*showLineNumbers)
+            flags |= WindowFlags::ShowLineNumbers;
+        else
+            flags &= ~WindowFlags::ShowLineNumbers;
+    }
+    
+    // Apply indicator region setting
+    auto showIndicators = editorTable->get_as<bool>("show_indicator_region");
+    if (showIndicators)
+    {
+        if (*showIndicators)
+            flags |= WindowFlags::ShowIndicators;
+        else
+            flags &= ~WindowFlags::ShowIndicators;
+    }
+    
+    window.SetWindowFlags(flags);
+}
+```
+
+</Steps>
+
+## Custom Configuration Sections
+
+You can add custom configuration sections for your application:
+
+```toml
+[editor]
+show_line_numbers = true
+
+[custom]
+enabled_features = ["autocomplete", "syntax_highlighting"]
+max_history = 100
+default_theme = "dark"
+
+[keybindings]
+save = "Ctrl+S"
+quit = "Ctrl+Q"
+find = "Ctrl+F"
+```
+
+### Parsing Custom Sections
+
+```cpp
+// Parse custom section
+auto customTable = config->get_table("custom");
+if (customTable)
+{
+    // Get array of strings
+    auto features = customTable->get_array_of<std::string>("enabled_features");
+    if (features)
+    {
+        for (const auto& feature : *features)
+        {
+            // Enable each feature
+        }
+    }
+    
+    // Get integer value
+    auto maxHistory = customTable->get_as<int64_t>("max_history");
+    if (maxHistory)
+    {
+        // Apply history limit
+    }
+}
+
+// Parse keybindings section
+auto keyTable = config->get_table("keybindings");
+if (keyTable)
+{
+    for (const auto& pair : *keyTable)
+    {
+        std::string action = pair.first;
+        auto binding = pair.second->as<std::string>();
+        if (binding)
+        {
+            // Register keybinding
+            RegisterKeybinding(action, binding->get());
+        }
+    }
+}
+```
+
+## Runtime Configuration
+
+Modify settings at runtime without reloading the config file:
+
+```cpp
+class EditorConfig
+{
+public:
+    void ToggleLineNumbers(ZepEditor& editor)
+    {
+        showLineNumbers = !showLineNumbers;
+        
+        // Apply to all windows
+        for (auto* pTab : editor.GetTabWindows())
+        {
+            for (auto* pWindow : pTab->GetWindows())
+            {
+                uint32_t flags = pWindow->GetWindowFlags();
+                if (showLineNumbers)
+                    flags |= WindowFlags::ShowLineNumbers;
+                else
+                    flags &= ~WindowFlags::ShowLineNumbers;
+                pWindow->SetWindowFlags(flags);
+            }
+        }
+    }
+    
+    void SetScrollbarMode(ZepEditor& editor, int mode)
+    {
+        scrollbarMode = mode;
+        // Apply setting...
+    }
+    
+private:
+    bool showLineNumbers = true;
+    int scrollbarMode = 0;
+    std::string style = "normal";
+};
+```
+
+## Saving Configuration
+
+<Warning>
+Make sure to validate all configuration values before saving to prevent creating invalid config files.
+</Warning>
+
+```cpp
+void SaveConfig(const EditorConfig& config, const std::string& path)
+{
+    auto root = cpptoml::make_table();
+    auto editorTable = cpptoml::make_table();
+    
+    // Set values
+    editorTable->insert("show_scrollbar", config.scrollbarMode);
+    editorTable->insert("style", config.style);
+    editorTable->insert("show_line_numbers", config.showLineNumbers);
+    editorTable->insert("show_indicator_region", config.showIndicators);
+    
+    root->insert("editor", editorTable);
+    
+    // Write to file
+    std::ofstream configFile(path);
+    configFile << (*root);
+}
+```
+
+## Configuration Validation
+
+```cpp
+bool ValidateConfig(std::shared_ptr<cpptoml::table> config)
+{
+    auto editorTable = config->get_table("editor");
+    if (!editorTable)
+    {
+        return false; // Required section missing
+    }
+    
+    // Validate scrollbar value
+    auto scrollbar = editorTable->get_as<int64_t>("show_scrollbar");
+    if (scrollbar && (*scrollbar < 0 || *scrollbar > 2))
+    {
+        std::cerr << "Invalid scrollbar value: " << *scrollbar << std::endl;
+        return false;
+    }
+    
+    // Validate style value
+    auto style = editorTable->get_as<std::string>("style");
+    if (style)
+    {
+        if (*style != "normal" && *style != "minimal")
+        {
+            std::cerr << "Invalid style: " << *style << std::endl;
+            return false;
+        }
+    }
+    
+    return true;
+}
+```
+
+## Best Practices
+
+1. **Provide defaults** - Always have fallback values if config is missing
+2. **Validate input** - Check that values are within acceptable ranges
+3. **Handle errors gracefully** - Don't crash if config file is invalid
+4. **Document settings** - Add comments explaining what each setting does
+5. **Version your config** - Consider adding a version field for future compatibility
+
+## Next Steps
+
+- Apply configuration to [Custom Modes](/advanced/custom-modes)
+- Configure [Text Markers](/advanced/text-markers) appearance
+- Customize [Window Management](/advanced/window-management) settings

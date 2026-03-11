@@ -1,0 +1,692 @@
+---
+title: ZepBuffer
+description: Text buffer class that manages document content using a gap buffer implementation
+---
+
+## Overview
+
+The `ZepBuffer` class represents a text document in Zep. It uses a gap buffer data structure for efficient text insertion and deletion operations. Each buffer can have syntax highlighting, themes, selections, range markers, and an associated editing mode.
+
+## Constructor
+
+### ZepBuffer
+
+```cpp
+ZepBuffer(ZepEditor& editor, const std::string& strName);
+ZepBuffer(ZepEditor& editor, const fs::path& path);
+```
+
+<ParamField path="editor" type="ZepEditor&" required>
+Reference to the parent editor
+</ParamField>
+
+<ParamField path="strName" type="const std::string&">
+Name for a new empty buffer
+</ParamField>
+
+<ParamField path="path" type="const fs::path&">
+File path to load into the buffer
+</ParamField>
+
+Create a buffer either with a name for empty content or from a file path.
+
+## File Operations
+
+### Load
+
+```cpp
+void Load(const fs::path& path);
+```
+
+<ParamField path="path" type="const fs::path&" required>
+Path to file to load
+</ParamField>
+
+Load file content into the buffer.
+
+### Save
+
+```cpp
+bool Save(int64_t& size);
+```
+
+<ParamField path="size" type="int64_t&" required>
+Output parameter receiving the number of bytes saved
+</ParamField>
+
+Save buffer content to its file path. Returns true on success.
+
+### GetFilePath / SetFilePath
+
+```cpp
+fs::path GetFilePath() const;
+void SetFilePath(const fs::path& path);
+```
+
+<ParamField path="path" type="const fs::path&" required>
+File path to set
+</ParamField>
+
+Get or set the file path associated with this buffer.
+
+### GetFileExtension
+
+```cpp
+std::string GetFileExtension() const;
+```
+
+Returns the file extension (e.g., "cpp", "h", "txt").
+
+## Text Content
+
+### SetText
+
+```cpp
+void SetText(const std::string& strText, bool initFromFile = false);
+```
+
+<ParamField path="strText" type="const std::string&" required>
+Text content to set
+</ParamField>
+
+<ParamField path="initFromFile" type="bool">
+True if this text was loaded from a file (default: false)
+</ParamField>
+
+Replace the entire buffer content with new text.
+
+### GetBufferText
+
+```cpp
+std::string GetBufferText(const GlyphIterator& start, const GlyphIterator& end) const;
+```
+
+<ParamField path="start" type="const GlyphIterator&" required>
+Start position
+</ParamField>
+
+<ParamField path="end" type="const GlyphIterator&" required>
+End position
+</ParamField>
+
+Extract text between two buffer positions.
+
+### Clear
+
+```cpp
+void Clear();
+```
+
+Clear all buffer content.
+
+### GetWorkingBuffer
+
+```cpp
+const GapBuffer<uint8_t>& GetWorkingBuffer() const;
+GapBuffer<uint8_t>& GetMutableWorkingBuffer();
+```
+
+Access the underlying gap buffer data structure.
+
+## Text Modification
+
+### Insert
+
+```cpp
+bool Insert(const GlyphIterator& startOffset, const std::string& str, ChangeRecord& changeRecord);
+```
+
+<ParamField path="startOffset" type="const GlyphIterator&" required>
+Position to insert at
+</ParamField>
+
+<ParamField path="str" type="const std::string&" required>
+Text to insert
+</ParamField>
+
+<ParamField path="changeRecord" type="ChangeRecord&" required>
+Record of the change for undo/redo
+</ParamField>
+
+Insert text at the specified position. Returns true on success.
+
+### Delete
+
+```cpp
+bool Delete(const GlyphIterator& startOffset, const GlyphIterator& endOffset, ChangeRecord& changeRecord);
+```
+
+<ParamField path="startOffset" type="const GlyphIterator&" required>
+Start of range to delete
+</ParamField>
+
+<ParamField path="endOffset" type="const GlyphIterator&" required>
+End of range to delete
+</ParamField>
+
+<ParamField path="changeRecord" type="ChangeRecord&" required>
+Record of the change for undo/redo
+</ParamField>
+
+Delete text in the specified range. Returns true on success.
+
+### Replace
+
+```cpp
+bool Replace(const GlyphIterator& startOffset, const GlyphIterator& endOffset, 
+             std::string str, ReplaceRangeMode mode, ChangeRecord& changeRecord);
+```
+
+<ParamField path="startOffset" type="const GlyphIterator&" required>
+Start of range to replace
+</ParamField>
+
+<ParamField path="endOffset" type="const GlyphIterator&" required>
+End of range to replace
+</ParamField>
+
+<ParamField path="str" type="std::string" required>
+Replacement text
+</ParamField>
+
+<ParamField path="mode" type="ReplaceRangeMode" required>
+Replace mode: `Fill` or `Replace`
+</ParamField>
+
+<ParamField path="changeRecord" type="ChangeRecord&" required>
+Record of the change for undo/redo
+</ParamField>
+
+Replace text in a range. Returns true on success.
+
+## Line Operations
+
+### GetLineCount
+
+```cpp
+long GetLineCount() const;
+```
+
+Returns the total number of lines in the buffer.
+
+### GetBufferLine
+
+```cpp
+long GetBufferLine(GlyphIterator offset) const;
+```
+
+<ParamField path="offset" type="GlyphIterator" required>
+Buffer position
+</ParamField>
+
+Get the line number for a buffer position.
+
+### GetLineOffsets
+
+```cpp
+bool GetLineOffsets(const long line, ByteRange& range) const;
+```
+
+<ParamField path="line" type="long" required>
+Line number
+</ParamField>
+
+<ParamField path="range" type="ByteRange&" required>
+Output parameter receiving start and end byte offsets
+</ParamField>
+
+Get the byte range for a line. Returns true if line exists.
+
+### GetLinePos
+
+```cpp
+GlyphIterator GetLinePos(GlyphIterator bufferLocation, LineLocation lineLocation) const;
+```
+
+<ParamField path="bufferLocation" type="GlyphIterator" required>
+Position in buffer
+</ParamField>
+
+<ParamField path="lineLocation" type="LineLocation" required>
+Desired location on line (LineBegin, LineEnd, etc.)
+</ParamField>
+
+Get position on a line relative to buffer location.
+
+### GetBufferColumn
+
+```cpp
+long GetBufferColumn(GlyphIterator location) const;
+```
+
+<ParamField path="location" type="GlyphIterator" required>
+Buffer position
+</ParamField>
+
+Get the column number for a buffer position.
+
+### GetLineEnds
+
+```cpp
+const std::vector<ByteIndex> GetLineEnds() const;
+```
+
+Get all line ending positions in the buffer.
+
+## Navigation and Search
+
+### Begin / End
+
+```cpp
+GlyphIterator Begin() const;
+GlyphIterator End() const;
+```
+
+Get iterators to the beginning or end of the buffer.
+
+### Move
+
+```cpp
+bool Move(GlyphIterator& loc, Direction dir) const;
+```
+
+<ParamField path="loc" type="GlyphIterator&" required>
+Position to move from (updated with new position)
+</ParamField>
+
+<ParamField path="dir" type="Direction" required>
+`Forward` or `Backward`
+</ParamField>
+
+Move one character in the specified direction. Returns false if at boundary.
+
+### Find
+
+```cpp
+GlyphIterator Find(GlyphIterator start, const uint8_t* pBegin, const uint8_t* pEnd) const;
+```
+
+<ParamField path="start" type="GlyphIterator" required>
+Position to start search
+</ParamField>
+
+<ParamField path="pBegin" type="const uint8_t*" required>
+Pointer to start of search string
+</ParamField>
+
+<ParamField path="pEnd" type="const uint8_t*" required>
+Pointer to end of search string
+</ParamField>
+
+Find text in buffer starting from position. Returns position or invalid iterator.
+
+### WordMotion
+
+```cpp
+GlyphIterator WordMotion(GlyphIterator start, uint32_t searchType, Direction dir) const;
+```
+
+<ParamField path="start" type="GlyphIterator" required>
+Starting position
+</ParamField>
+
+<ParamField path="searchType" type="uint32_t" required>
+Search flags from `SearchType` enum (WORD, Begin, End, Word, SingleLine)
+</ParamField>
+
+<ParamField path="dir" type="Direction" required>
+`Forward` or `Backward`
+</ParamField>
+
+Move to the start of the next/previous word.
+
+### EndWordMotion
+
+```cpp
+GlyphIterator EndWordMotion(GlyphIterator start, uint32_t searchType, Direction dir) const;
+```
+
+<ParamField path="start" type="GlyphIterator" required>
+Starting position
+</ParamField>
+
+<ParamField path="searchType" type="uint32_t" required>
+Search type flags
+</ParamField>
+
+<ParamField path="dir" type="Direction" required>
+Direction to search
+</ParamField>
+
+Move to the end of the next/previous word.
+
+### FindMatchingParen
+
+```cpp
+GlyphIterator FindMatchingParen(GlyphIterator bufferCursor);
+```
+
+<ParamField path="bufferCursor" type="GlyphIterator" required>
+Position of opening/closing parenthesis
+</ParamField>
+
+Find the matching parenthesis, bracket, or brace.
+
+## Selections
+
+### SetSelection
+
+```cpp
+void SetSelection(const GlyphRange& sel);
+```
+
+<ParamField path="sel" type="const GlyphRange&" required>
+Range to select
+</ParamField>
+
+Set the current selection range.
+
+### GetInclusiveSelection
+
+```cpp
+GlyphRange GetInclusiveSelection() const;
+```
+
+Get the current selection as an inclusive range.
+
+### HasSelection
+
+```cpp
+bool HasSelection() const;
+```
+
+Check if there is an active selection.
+
+### ClearSelection
+
+```cpp
+void ClearSelection();
+```
+
+Clear the current selection.
+
+## Range Markers
+
+### AddRangeMarker
+
+```cpp
+void AddRangeMarker(std::shared_ptr<RangeMarker> spMarker);
+```
+
+<ParamField path="spMarker" type="std::shared_ptr<RangeMarker>" required>
+Marker to add
+</ParamField>
+
+Add a range marker (for errors, warnings, search results, etc.).
+
+### ClearRangeMarker
+
+```cpp
+void ClearRangeMarker(std::shared_ptr<RangeMarker> spMarker);
+void ClearRangeMarkers(const std::set<std::shared_ptr<RangeMarker>>& markers);
+void ClearRangeMarkers(uint32_t types);
+```
+
+<ParamField path="spMarker" type="std::shared_ptr<RangeMarker>">
+Specific marker to remove
+</ParamField>
+
+<ParamField path="markers" type="const std::set<std::shared_ptr<RangeMarker>>&">
+Set of markers to remove
+</ParamField>
+
+<ParamField path="types" type="uint32_t">
+Marker type flags to remove
+</ParamField>
+
+Remove range markers from the buffer.
+
+### GetRangeMarkers
+
+```cpp
+tRangeMarkers GetRangeMarkers(uint32_t types) const;
+tRangeMarkers GetRangeMarkersOnLine(uint32_t types, long line) const;
+```
+
+<ParamField path="types" type="uint32_t" required>
+Marker type flags to retrieve
+</ParamField>
+
+<ParamField path="line" type="long">
+Specific line number
+</ParamField>
+
+Get markers of specified types, optionally filtered by line.
+
+### ShowMarkers / HideMarkers
+
+```cpp
+void ShowMarkers(uint32_t markerType, uint32_t displayType);
+void HideMarkers(uint32_t markerType);
+```
+
+<ParamField path="markerType" type="uint32_t" required>
+Type of markers to show/hide
+</ParamField>
+
+<ParamField path="displayType" type="uint32_t">
+How to display the markers
+</ParamField>
+
+Show or hide markers of a specific type.
+
+## Syntax and Theme
+
+### SetSyntax / GetSyntax
+
+```cpp
+void SetSyntax(std::shared_ptr<ZepSyntax> syntax);
+ZepSyntax* GetSyntax() const;
+```
+
+<ParamField path="syntax" type="std::shared_ptr<ZepSyntax>" required>
+Syntax highlighter to use
+</ParamField>
+
+Set or get the syntax highlighter for this buffer.
+
+### SetSyntaxProvider
+
+```cpp
+void SetSyntaxProvider(SyntaxProvider provider);
+```
+
+<ParamField path="provider" type="SyntaxProvider" required>
+Syntax provider with factory function
+</ParamField>
+
+Set the syntax provider which creates the appropriate syntax highlighter.
+
+### SetTheme / GetTheme
+
+```cpp
+void SetTheme(std::shared_ptr<ZepTheme> spTheme);
+ZepTheme& GetTheme() const;
+```
+
+<ParamField path="spTheme" type="std::shared_ptr<ZepTheme>" required>
+Theme to apply
+</ParamField>
+
+Set or get the theme for this buffer.
+
+### SetToneColor / GetToneColor
+
+```cpp
+void SetToneColor(const NVec4f& toneColor);
+const NVec4f& GetToneColor() const;
+```
+
+<ParamField path="toneColor" type="const NVec4f&" required>
+RGBA tone color
+</ParamField>
+
+Set or get an overlay tone color for the buffer.
+
+## Mode Management
+
+### SetMode / GetMode
+
+```cpp
+void SetMode(std::shared_ptr<ZepMode> spMode);
+ZepMode* GetMode() const;
+```
+
+<ParamField path="spMode" type="std::shared_ptr<ZepMode>" required>
+Editor mode (Vim, Standard, etc.)
+</ParamField>
+
+Set or get the editing mode for this buffer.
+
+## Buffer Properties
+
+### GetName
+
+```cpp
+const std::string& GetName() const;
+```
+
+Get the buffer name.
+
+### GetDisplayName
+
+```cpp
+std::string GetDisplayName() const;
+```
+
+Get the display name (may be shortened or formatted).
+
+### SetBufferType / GetBufferType
+
+```cpp
+void SetBufferType(BufferType type);
+BufferType GetBufferType() const;
+```
+
+<ParamField path="type" type="BufferType" required>
+Buffer type: `Normal`, `Search`, `Repl`, `DataGrid`, or `Tree`
+</ParamField>
+
+Set or get the buffer type.
+
+### HasFileFlags / SetFileFlags / ClearFileFlags
+
+```cpp
+bool HasFileFlags(uint32_t flags) const;
+void SetFileFlags(uint32_t flags, bool set = true);
+void ClearFileFlags(uint32_t flags);
+void ToggleFileFlag(uint32_t flags);
+```
+
+<ParamField path="flags" type="uint32_t" required>
+Flags from `FileFlags` enum:
+- `StrippedCR`: Carriage returns were removed
+- `ReadOnly`: Buffer is read-only
+- `Locked`: File path cannot be written to
+- `Dirty`: Buffer has unsaved changes
+- `HasWarnings`: Buffer has warnings
+- `HasErrors`: Buffer has errors
+- `HasTabs`: Buffer contains tab characters
+- `InsertTabs`: Insert tabs instead of spaces
+</ParamField>
+
+Manage file flags for the buffer.
+
+### IsHidden
+
+```cpp
+bool IsHidden() const;
+```
+
+Check if the buffer is hidden.
+
+## Undo/Redo
+
+### GetUndoStack / GetRedoStack
+
+```cpp
+std::stack<std::shared_ptr<ZepCommand>>& GetUndoStack();
+std::stack<std::shared_ptr<ZepCommand>>& GetRedoStack();
+```
+
+Access the undo and redo command stacks.
+
+## Update Tracking
+
+### GetLastUpdateTime
+
+```cpp
+uint64_t GetLastUpdateTime() const;
+```
+
+Get timestamp of last buffer modification.
+
+### GetUpdateCount
+
+```cpp
+uint64_t GetUpdateCount() const;
+```
+
+Get the number of times the buffer has been updated.
+
+## Signals
+
+### sigPreInsert
+
+```cpp
+Zep::signal<void(ZepBuffer& buffer, const GlyphIterator&, const std::string&)> sigPreInsert;
+```
+
+Signal emitted before text insertion.
+
+### sigPreDelete
+
+```cpp
+Zep::signal<void(ZepBuffer& buffer, const GlyphIterator&, const GlyphIterator&)> sigPreDelete;
+```
+
+Signal emitted before text deletion.
+
+## Usage Example
+
+```cpp
+#include <zep/buffer.h>
+#include <zep/editor.h>
+
+// Create buffer from file
+ZepBuffer buffer(editor, "/path/to/file.cpp");
+
+// Set syntax highlighting
+auto spSyntax = std::make_shared<ZepSyntax_CPP>(buffer);
+buffer.SetSyntax(spSyntax);
+
+// Insert text
+ChangeRecord change;
+GlyphIterator pos = buffer.Begin();
+buffer.Insert(pos, "// New comment\n", change);
+
+// Create a selection
+GlyphIterator start = buffer.Begin();
+GlyphIterator end = buffer.End();
+buffer.SetSelection(GlyphRange(start, end));
+
+// Add error marker
+auto marker = std::make_shared<RangeMarker>();
+marker->range = GlyphRange(errorStart, errorEnd);
+marker->markerType = RangeMarkerType::Error;
+buffer.AddRangeMarker(marker);
+
+// Save buffer
+int64_t size;
+buffer.Save(size);
+```

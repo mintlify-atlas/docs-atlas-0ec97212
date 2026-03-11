@@ -1,0 +1,176 @@
+---
+title: Integration Overview
+description: Choose the best way to integrate Zep into your application
+---
+
+Zep is a flexible, embeddable text editor that can be integrated into your application in multiple ways. This guide will help you choose the right integration method for your needs.
+
+## Integration Methods
+
+Zep provides three primary integration approaches:
+
+<CardGroup cols={3}>
+  <Card title="Single Header" icon="file-code" href="/integration/single-header">
+    Include `zep.h` and start coding immediately
+  </Card>
+  <Card title="CMake Library" icon="cube" href="/integration/cmake-library">
+    Install Zep as a library and link with CMake
+  </Card>
+  <Card title="Direct Source" icon="folder-tree">
+    Copy source files directly into your project
+  </Card>
+</CardGroup>
+
+## Rendering Backends
+
+Zep provides rendering backends for popular UI frameworks:
+
+<CardGroup cols={2}>
+  <Card title="ImGui Integration" icon="gamepad" href="/integration/imgui">
+    Perfect for game engines and real-time applications
+  </Card>
+  <Card title="Qt Integration" icon="window" href="/integration/qt">
+    Native desktop application integration
+  </Card>
+</CardGroup>
+
+## When to Use Each Method
+
+### Single Header Include
+
+**Best for:**
+- Quick prototypes and experimentation
+- Small projects with simple build systems
+- When you want minimal configuration
+- Projects that don't use CMake
+
+**Advantages:**
+- Zero build configuration
+- Just `#include "zep/zep.h"` and define `ZEP_SINGLE_HEADER_BUILD`
+- No package management needed
+- Fastest way to get started
+
+**Disadvantages:**
+- Slower compile times (single translation unit)
+- Less control over which components to include
+- Not ideal for large projects
+
+### CMake Library
+
+**Best for:**
+- Production applications
+- Projects already using CMake
+- When you need proper library versioning
+- Multi-project setups sharing Zep
+
+**Advantages:**
+- Faster incremental builds
+- Proper library versioning and installation
+- Better integration with package managers
+- Separation of compilation units
+- Build options for features (Qt, ImGui, tests, demos)
+
+**Disadvantages:**
+- Requires CMake knowledge
+- More setup steps (configure, build, install)
+- Need to manage library dependencies
+
+### Direct Source Copy
+
+**Best for:**
+- Full control over the build process
+- Custom or minimal build systems
+- Embedded systems with specific toolchains
+- When you need to modify Zep source code
+
+**Advantages:**
+- Complete control over compilation
+- No external dependencies
+- Easy to patch or customize
+- Works with any build system
+
+**Disadvantages:**
+- Manual dependency management
+- Need to track upstream changes yourself
+- More files to manage in your repository
+
+## System Requirements
+
+### Core Library
+
+The Zep core library has minimal requirements:
+
+- **C++ Standard**: C++17 or later
+- **Compiler**: 
+  - Visual Studio 2017 or later (Windows)
+  - GCC 6 or later (Linux)
+  - Clang (macOS/Linux)
+- **Dependencies**: None (core library is dependency-free)
+
+### Rendering Backends
+
+#### ImGui Backend
+
+- **ImGui**: Version 1.80+ recommended
+- **Additional**: SDL2 or other windowing library (for the demo)
+- **Graphics**: OpenGL 3.0+ or other ImGui-supported backends
+
+#### Qt Backend
+
+- **Qt Version**: Qt 5.10+ or Qt 6
+- **Modules**: QtCore, QtGui, QtWidgets
+- **Platforms**: Windows, macOS, Linux
+
+## Build Options
+
+When building Zep with CMake, you can control which components are built:
+
+```cmake CMake Options
+BUILD_QT=ON/OFF           # Build Qt rendering backend
+BUILD_IMGUI=ON/OFF        # Build ImGui rendering backend
+BUILD_DEMOS=ON/OFF        # Build demo applications
+BUILD_TESTS=ON/OFF        # Build unit tests
+ZEP_FEATURE_CPP_FILE_SYSTEM=ON/OFF  # Enable C++ filesystem support
+```
+
+<Note>
+  The demos require additional dependencies (SDL2, OpenGL, etc.), but the core Zep library does not.
+</Note>
+
+## Feature Comparison
+
+| Feature | Single Header | CMake Library | Direct Source |
+|---------|--------------|---------------|---------------|
+| Setup Time | Instant | Medium | Low |
+| Build Time (Initial) | Slow | Fast | Medium |
+| Build Time (Incremental) | Slow | Fast | Medium |
+| Customization | Limited | Medium | Full |
+| Dependency Management | Auto | CMake | Manual |
+| Multiple Projects | Copy per project | Shared library | Copy per project |
+| Suitable for Production | Small projects | Yes | Yes |
+
+## Next Steps
+
+Choose your integration path:
+
+<Steps>
+  <Step title="Choose Integration Method">
+    Select single-header for quick starts, CMake for production, or direct source for full control.
+  </Step>
+  
+  <Step title="Choose Rendering Backend">
+    Pick ImGui for game engines or Qt for desktop applications.
+  </Step>
+  
+  <Step title="Follow the Guide">
+    Follow the specific integration guide for your chosen method and backend.
+  </Step>
+</Steps>
+
+## Example Projects
+
+For complete working examples, see:
+
+- **[zep_imgui](https://github.com/cmaughan/zep_imgui)** - Minimal ImGui integration example
+- **demos/demo_imgui/** - Full-featured ImGui demo in the Zep repository
+- **demos/demo_qt/** - Qt integration demo

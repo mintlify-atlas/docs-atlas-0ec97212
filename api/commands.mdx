@@ -1,0 +1,372 @@
+---
+title: ZepCommand
+description: Command pattern implementation for undo/redo in the Zep text editor
+---
+
+## Overview
+
+The `ZepCommand` system implements the Command pattern to provide undo/redo functionality for text editing operations. Each editing operation is encapsulated as a command object that can be executed, undone, and redone.
+
+Source: `include/zep/commands.h:8`
+
+## Command Pattern Design
+
+The command system follows the classic Gang of Four Command pattern:
+
+1. **Encapsulation**: Each operation is wrapped in a command object
+2. **Reversibility**: Commands implement both `Redo()` and `Undo()` 
+3. **History**: Commands can be stored in a stack for undo/redo
+4. **Cursor tracking**: Commands store cursor positions before and after execution
+
+## Base Class: ZepCommand
+
+```cpp
+class ZepCommand
+{
+public:
+    ZepCommand(ZepBuffer& currentMode, 
+               const GlyphIterator& cursorBefore = GlyphIterator(), 
+               const GlyphIterator& cursorAfter = GlyphIterator());
+    
+    virtual ~ZepCommand();
+    
+    virtual void Redo() = 0;
+    virtual void Undo() = 0;
+    
+    virtual GlyphIterator GetCursorAfter() const;
+    virtual GlyphIterator GetCursorBefore() const;
+    
+protected:
+    ZepBuffer& m_buffer;
+    GlyphIterator m_cursorBefore;
+    GlyphIterator m_cursorAfter;
+    ChangeRecord m_changeRecord;
+};
+```
+
+Source: `include/zep/commands.h:8-39`
+
+### Constructor
+
+```cpp
+ZepCommand(ZepBuffer& currentMode,
+           const GlyphIterator& cursorBefore = GlyphIterator(),
+           const GlyphIterator& cursorAfter = GlyphIterator())
+```
+
+**Parameters:**
+- `currentMode` - Reference to the buffer being edited
+- `cursorBefore` - Cursor position before the command executes
+- `cursorAfter` - Cursor position after the command executes
+
+Source: `include/zep/commands.h:11`
+
+### Core Methods
+
+#### Redo()
+
+```cpp
+virtual void Redo() = 0
+```
+
+Executes or re-executes the command. This applies the editing operation to the buffer.
+
+Source: `include/zep/commands.h:22`
+
+#### Undo()
+
+```cpp
+virtual void Undo() = 0
+```
+
+Reverses the command's effect. This restores the buffer to its state before the command was executed.
+
+Source: `include/zep/commands.h:23`
+
+### Cursor Position Methods
+
+#### GetCursorAfter()
+
+```cpp
+virtual GlyphIterator GetCursorAfter() const
+```
+
+Returns the cursor position that should be set after executing the command.
+
+Source: `include/zep/commands.h:25`
+
+#### GetCursorBefore()
+
+```cpp
+virtual GlyphIterator GetCursorBefore() const
+```
+
+Returns the cursor position before the command was executed.
+
+Source: `include/zep/commands.h:29`
+
+### Protected Members
+
+```cpp
+ZepBuffer& m_buffer;              // The buffer being edited
+GlyphIterator m_cursorBefore;     // Cursor position before command
+GlyphIterator m_cursorAfter;      // Cursor position after command  
+ChangeRecord m_changeRecord;       // Record of changes made
+```
+
+Source: `include/zep/commands.h:35-38`
+
+## Command Types
+
+### ZepCommand_GroupMarker
+
+```cpp
+class ZepCommand_GroupMarker : public ZepCommand
+{
+public:
+    ZepCommand_GroupMarker(ZepBuffer& currentMode);
+    virtual void Redo() override {};
+    virtual void Undo() override {};
+};
+```
+
+Marks the beginning of a command group. Multiple commands between a `GroupMarker` and `EndGroup` are treated as a single undoable unit.
+
+Source: `include/zep/commands.h:41`
+
+### ZepCommand_EndGroup
+
+```cpp
+class ZepCommand_EndGroup : public ZepCommand
+{
+public:
+    ZepCommand_EndGroup(ZepBuffer& currentMode);
+    virtual void Redo() override {};
+    virtual void Undo() override {};
+};
+```
+
+Marks the end of a command group.
+
+Source: `include/zep/commands.h:52`
+
+### ZepCommand_DeleteRange
+
+```cpp
+class ZepCommand_DeleteRange : public ZepCommand
+{
+public:
+    ZepCommand_DeleteRange(ZepBuffer& buffer,
+                           const GlyphIterator& startIndex,
+                           const GlyphIterator& endIndex,
+                           const GlyphIterator& cursor = GlyphIterator(),
+                           const GlyphIterator& cursorAfter = GlyphIterator());
+    virtual ~ZepCommand_DeleteRange();
+    
+    virtual void Redo() override;
+    virtual void Undo() override;
+    
+    GlyphIterator m_startIndex;
+    GlyphIterator m_endIndex;
+};
+```
+
+Deletes a range of text from the buffer. The deleted text is preserved for undo.
+
+**Members:**
+- `m_startIndex` - Beginning of the range to delete
+- `m_endIndex` - End of the range to delete
+
+Source: `include/zep/commands.h:63`
+
+### ZepCommand_ReplaceRange
+
+```cpp
+class ZepCommand_ReplaceRange : public ZepCommand
+{
+public:
+    ZepCommand_ReplaceRange(ZepBuffer& buffer,
+                            ReplaceRangeMode replaceMode,
+                            const GlyphIterator& startIndex,
+                            const GlyphIterator& endIndex,
+                            const std::string& ch,
+                            const GlyphIterator& cursor = GlyphIterator(),
+                            const GlyphIterator& cursorAfter = GlyphIterator());
+    virtual ~ZepCommand_ReplaceRange();
+    
+    virtual void Redo() override;
+    virtual void Undo() override;
+    
+    GlyphIterator m_startIndex;
+    GlyphIterator m_endIndex;
+    std::string m_strReplace;
+    ReplaceRangeMode m_mode;
+    ChangeRecord m_deleteStepChange;
+};
+```
+
+Replaces a range of text with new text. This is essentially a delete followed by an insert, but treated as an atomic operation.
+
+**Members:**
+- `m_startIndex` - Beginning of the range to replace
+- `m_endIndex` - End of the range to replace
+- `m_strReplace` - The replacement text
+- `m_mode` - Replace mode flags
+- `m_deleteStepChange` - Records the deletion step for undo
+
+Source: `include/zep/commands.h:76`
+
+### ZepCommand_Insert
+
+```cpp
+class ZepCommand_Insert : public ZepCommand
+{
+public:
+    ZepCommand_Insert(ZepBuffer& buffer,
+                      const GlyphIterator& startIndex,
+                      const std::string& str,
+                      const GlyphIterator& cursor = GlyphIterator(),
+                      const GlyphIterator& cursorAfter = GlyphIterator());
+    virtual ~ZepCommand_Insert();
+    
+    virtual void Redo() override;
+    virtual void Undo() override;
+    
+    GlyphIterator m_startIndex;
+    std::string m_strInsert;
+    GlyphIterator m_endIndexInserted;
+};
+```
+
+Inserts text at a specified position in the buffer.
+
+**Members:**
+- `m_startIndex` - Position to insert at
+- `m_strInsert` - The text to insert
+- `m_endIndexInserted` - Position after insertion (for undo)
+
+Source: `include/zep/commands.h:93`
+
+## Undo/Redo System
+
+### How It Works
+
+1. **Command Creation**: When the user performs an edit, a command object is created
+2. **Execution**: The command's `Redo()` method is called to perform the edit
+3. **History Stack**: The command is pushed onto an undo stack
+4. **Undo**: Calling `Undo()` reverses the command and moves it to the redo stack
+5. **Redo**: Calling `Redo()` reapplies the command and moves it back to the undo stack
+
+### Command Groups
+
+Multiple individual commands can be grouped together using `ZepCommand_GroupMarker` and `ZepCommand_EndGroup`. This allows complex operations to be undone/redone as a single unit:
+
+```
+[GroupMarker]
+[Insert "Hello"]
+[Insert " "]
+[Insert "World"]
+[EndGroup]
+```
+
+Undoing this group will remove all three insertions in one step.
+
+### ChangeRecord
+
+The `m_changeRecord` member tracks metadata about the change:
+- What was modified
+- Original values (for undo)
+- Change locations
+- Timestamps or sequence numbers
+
+## Example Usage
+
+```cpp
+// Insert text
+auto insertCmd = std::make_unique<ZepCommand_Insert>(
+    buffer,
+    cursorPosition,
+    "Hello World",
+    cursorPosition,
+    cursorPosition + 11
+);
+insertCmd->Redo();
+undoStack.push(std::move(insertCmd));
+
+// Delete a range
+auto deleteCmd = std::make_unique<ZepCommand_DeleteRange>(
+    buffer,
+    startPos,
+    endPos,
+    startPos,
+    startPos
+);
+deleteCmd->Redo();
+undoStack.push(std::move(deleteCmd));
+
+// Undo the last command
+if (!undoStack.empty()) {
+    auto cmd = std::move(undoStack.top());
+    undoStack.pop();
+    cmd->Undo();
+    buffer.SetCursorPosition(cmd->GetCursorBefore());
+    redoStack.push(std::move(cmd));
+}
+
+// Redo
+if (!redoStack.empty()) {
+    auto cmd = std::move(redoStack.top());
+    redoStack.pop();
+    cmd->Redo();
+    buffer.SetCursorPosition(cmd->GetCursorAfter());
+    undoStack.push(std::move(cmd));
+}
+```
+
+## Grouped Command Example
+
+```cpp
+// Begin a command group
+auto groupStart = std::make_unique<ZepCommand_GroupMarker>(buffer);
+undoStack.push(std::move(groupStart));
+
+// Multiple operations
+for (const auto& word : words) {
+    auto insertCmd = std::make_unique<ZepCommand_Insert>(
+        buffer, cursor, word, cursor, cursor + word.length());
+    insertCmd->Redo();
+    undoStack.push(std::move(insertCmd));
+    cursor += word.length();
+}
+
+// End the command group
+auto groupEnd = std::make_unique<ZepCommand_EndGroup>(buffer);
+undoStack.push(std::move(groupEnd));
+
+// Now undo will reverse all insertions in one step
+```
+
+## Design Patterns and Best Practices
+
+### Command Pattern Benefits
+
+1. **Separation of Concerns**: Edit logic is separate from UI code
+2. **History Management**: Commands can be logged, replayed, or persisted
+3. **Macro Recording**: Command sequences can be recorded and replayed
+4. **Testing**: Commands can be unit tested independently
+
+### Cursor Position Tracking
+
+Commands track cursor positions to ensure the cursor is correctly positioned after undo/redo:
+- `m_cursorBefore`: Where the cursor was before the edit
+- `m_cursorAfter`: Where the cursor should be after the edit
+
+This ensures a smooth editing experience when navigating history.
+
+### Memory Management
+
+Commands are typically managed with smart pointers (`std::unique_ptr`) in the undo/redo stacks. The buffer does not need to manage command lifetime.
+
+### Atomic Operations
+
+`ZepCommand_ReplaceRange` demonstrates combining delete and insert into a single atomic command. This is more efficient than separate commands and provides better undo granularity.

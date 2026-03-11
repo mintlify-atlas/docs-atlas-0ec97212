@@ -1,0 +1,393 @@
+---
+title: "Window Management"
+description: "Learn how to create and manage multiple windows, tabs, and splits in Zep"
+---
+
+## Overview
+
+Zep's window management system allows you to display multiple views of buffers simultaneously. The hierarchy consists of:
+
+- **ZepEditor** - The top-level editor instance
+- **ZepTabWindow** - A container for one or more windows (like IDE tabs)
+- **ZepWindow** - A single pane displaying a buffer
+- **Splits** - Regions within a tab that organize windows
+
+## Window Architecture
+
+```
+ZepEditor
+  └── ZepTabWindow (Tab 1)
+  │     ├── ZepWindow (Buffer A)
+  │     └── ZepWindow (Buffer B)
+  └── ZepTabWindow (Tab 2)
+        └── ZepWindow (Buffer C)
+```
+
+## Working with Windows
+
+### Creating a Window
+
+Windows are always created within a `ZepTabWindow`:
+
+```cpp
+// Get or create a tab window
+ZepTabWindow* pTabWindow = editor.GetActiveTabWindow();
+
+// Create a new window for a buffer
+ZepBuffer* pBuffer = editor.GetFileBuffer("myfile.cpp");
+ZepWindow* pWindow = pTabWindow->AddWindow(pBuffer);
+
+// Set as the active window
+pTabWindow->SetActiveWindow(pWindow);
+```
+
+### Window Display Region
+
+Every window has a display region that defines its screen position:
+
+```cpp
+// Set the window's display area
+NRectf region(x, y, width, height);
+pWindow->SetDisplayRegion(region);
+
+// Trigger display update
+pWindow->Display();
+```
+
+<Note>
+The window's display region is typically managed automatically by the tab window's layout system.
+</Note>
+
+## Tab Windows
+
+### Creating Tab Windows
+
+```cpp
+// Create a new tab window
+ZepTabWindow* pTabWindow = new ZepTabWindow(editor);
+
+// Set the display region for the entire tab
+NRectf tabRegion(0, 0, 1024, 768);
+pTabWindow->SetDisplayRegion(tabRegion);
+
+// Display all windows in the tab
+pTabWindow->Display();
+```
+
+### Active Window Management
+
+```cpp
+// Get the currently active window
+ZepWindow* pActive = pTabWindow->GetActiveWindow();
+
+// Switch to a different window
+pTabWindow->SetActiveWindow(pWindow);
+
+// Close the active window
+pTabWindow->CloseActiveWindow();
+```
+
+### Iterating Windows
+
+```cpp
+const auto& windows = pTabWindow->GetWindows();
+for (ZepWindow* pWindow : windows)
+{
+    ZepBuffer& buffer = pWindow->GetBuffer();
+    // Process each window...
+}
+```
+
+## Window Splits
+
+Splits allow you to divide a tab window into multiple panes.
+
+<Steps>
+
+### Create a Horizontal Split
+
+```cpp
+// Add a window below the current window
+ZepWindow* pCurrentWindow = pTabWindow->GetActiveWindow();
+ZepBuffer* pNewBuffer = editor.GetEmptyBuffer("scratch");
+
+ZepWindow* pNewWindow = pTabWindow->AddWindow(
+    pNewBuffer,
+    pCurrentWindow,           // Parent window
+    RegionLayoutType::VBox    // Vertical box (stacks vertically)
+);
+```
+
+### Create a Vertical Split
+
+```cpp
+// Add a window beside the current window
+ZepWindow* pNewWindow = pTabWindow->AddWindow(
+    pNewBuffer,
+    pCurrentWindow,           // Parent window
+    RegionLayoutType::HBox    // Horizontal box (stacks horizontally)
+);
+```
+
+### Navigate Between Splits
+
+```cpp
+// Move focus to adjacent windows
+ZepWindow* pLeft = pTabWindow->DoMotion(WindowMotion::Left);
+ZepWindow* pRight = pTabWindow->DoMotion(WindowMotion::Right);
+ZepWindow* pUp = pTabWindow->DoMotion(WindowMotion::Up);
+ZepWindow* pDown = pTabWindow->DoMotion(WindowMotion::Down);
+
+if (pLeft)
+{
+    pTabWindow->SetActiveWindow(pLeft);
+}
+```
+
+</Steps>
+
+### Region Layout Types
+
+<CodeGroup>
+
+```cpp VBox (Vertical)
+// Stacks windows vertically (one above the other)
+RegionLayoutType::VBox
+
+┌─────────────┐
+│  Window 1   │
+├─────────────┤
+│  Window 2   │
+└─────────────┘
+```
+
+```cpp HBox (Horizontal)
+// Stacks windows horizontally (side by side)
+RegionLayoutType::HBox
+
+┌──────┬──────┐
+│ Win1 │ Win2 │
+└──────┴──────┘
+```
+
+</CodeGroup>
+
+## Window Flags
+
+Customize window appearance and behavior with flags:
+
+```cpp
+// Get current flags
+uint32_t flags = pWindow->GetWindowFlags();
+
+// Modify flags
+flags |= WindowFlags::ShowLineNumbers;
+flags |= WindowFlags::ShowIndicators;
+flags &= ~WindowFlags::HideScrollBar;
+
+// Apply new flags
+pWindow->SetWindowFlags(flags);
+
+// Or toggle a single flag
+pWindow->ToggleFlag(WindowFlags::ShowWhiteSpace);
+```
+
+### Available Window Flags
+
+| Flag | Description |
+|------|-------------|
+| `None` | No special flags |
+| `ShowWhiteSpace` | Display whitespace characters |
+| `ShowCR` | Display carriage return characters |
+| `ShowLineNumbers` | Show line numbers in gutter |
+| `ShowIndicators` | Show indicator region (errors, warnings) |
+| `HideScrollBar` | Hide the vertical scrollbar |
+| `Modal` | Window is modal (blocks other input) |
+| `WrapText` | Enable text wrapping (experimental) |
+| `HideSplitMark` | Hide the split divider |
+| `GridStyle` | Use grid-style display |
+
+## Buffer Management
+
+### Switching Buffers
+
+```cpp
+// Change which buffer a window displays
+ZepBuffer* pNewBuffer = editor.GetFileBuffer("other.cpp");
+pWindow->SetBuffer(pNewBuffer);
+
+// Get the current buffer
+ZepBuffer& buffer = pWindow->GetBuffer();
+```
+
+<Warning>
+Every window must always have an active buffer. Never set a null buffer.
+</Warning>
+
+### Multiple Views of One Buffer
+
+```cpp
+// Create two windows viewing the same buffer
+ZepBuffer* pBuffer = editor.GetFileBuffer("shared.cpp");
+
+ZepWindow* pWindow1 = pTabWindow->AddWindow(pBuffer);
+ZepWindow* pWindow2 = pTabWindow->AddWindow(
+    pBuffer,
+    pWindow1,
+    RegionLayoutType::HBox
+);
+
+// Each window has independent cursor position
+pWindow1->SetBufferCursor(buffer.Begin());
+pWindow2->SetBufferCursor(buffer.End());
+```
+
+## Cursor Management
+
+### Window Cursors
+
+Each window maintains its own cursor position:
+
+```cpp
+// Get cursor position
+GlyphIterator cursor = pWindow->GetBufferCursor();
+
+// Set cursor position
+GlyphIterator newPos = buffer.Begin() + 100;
+pWindow->SetBufferCursor(newPos);
+
+// Move cursor vertically
+pWindow->MoveCursorY(5);  // Move down 5 lines
+pWindow->MoveCursorY(-3); // Move up 3 lines
+```
+
+### Convert Between Coordinates
+
+```cpp
+// Convert buffer position to display coordinates
+NVec2i displayPos = pWindow->BufferToDisplay();
+
+// The coordinates are relative to the window's text region
+float screenX = displayPos.x;
+float screenY = displayPos.y;
+```
+
+## Display Information
+
+### Visible Lines
+
+```cpp
+// Get maximum number of lines that can be displayed
+long maxLines = pWindow->GetMaxDisplayLines();
+
+// Get actual number of displayed lines
+long numDisplayed = pWindow->GetNumDisplayedLines();
+```
+
+## Complete Example: Split View Editor
+
+```cpp
+class SplitEditor
+{
+public:
+    void Setup(ZepEditor& editor)
+    {
+        // Create a tab window
+        ZepTabWindow* pTab = new ZepTabWindow(editor);
+        
+        // Load two buffers
+        ZepBuffer* pHeader = editor.GetFileBuffer("myclass.h");
+        ZepBuffer* pSource = editor.GetFileBuffer("myclass.cpp");
+        
+        // Create first window (left side)
+        ZepWindow* pLeftWindow = pTab->AddWindow(pHeader);
+        
+        // Configure left window
+        pLeftWindow->SetWindowFlags(
+            WindowFlags::ShowLineNumbers |
+            WindowFlags::ShowIndicators
+        );
+        
+        // Create second window (right side) as horizontal split
+        ZepWindow* pRightWindow = pTab->AddWindow(
+            pSource,
+            pLeftWindow,
+            RegionLayoutType::HBox
+        );
+        
+        // Configure right window
+        pRightWindow->SetWindowFlags(
+            WindowFlags::ShowLineNumbers |
+            WindowFlags::ShowIndicators
+        );
+        
+        // Set display region for entire tab
+        NRectf region(0, 0, 1920, 1080);
+        pTab->SetDisplayRegion(region);
+        
+        // Set left window as active
+        pTab->SetActiveWindow(pLeftWindow);
+    }
+    
+    void NavigateSplits(ZepTabWindow* pTab, WindowMotion motion)
+    {
+        ZepWindow* pTarget = pTab->DoMotion(motion);
+        if (pTarget)
+        {
+            pTab->SetActiveWindow(pTarget);
+        }
+    }
+};
+```
+
+## Removing Windows
+
+```cpp
+// Remove a specific window
+pTabWindow->RemoveWindow(pWindow);
+
+// Or close the active window
+pTabWindow->CloseActiveWindow();
+```
+
+<Note>
+When you remove the last window from a tab, you should remove the tab itself or add a new window.
+</Note>
+
+## Regions and Layout
+
+The layout system uses `Region` objects to manage window positioning:
+
+```cpp
+struct Region
+{
+    RegionLayoutType layoutType;  // VBox or HBox
+    uint32_t flags;               // Fixed, Expanding, AlignCenter
+    NRectf rect;                  // Position and size
+    NVec2f fixed_size;            // Fixed dimensions
+    NVec2f padding;               // Padding around region
+    NVec4f margin;                // Margins (top, right, bottom, left)
+    Region* pParent;              // Parent region
+    std::vector<std::shared_ptr<Region>> children;  // Child regions
+};
+```
+
+### Region Flags
+
+- **RegionFlags::Fixed** - Region has a fixed size
+- **RegionFlags::Expanding** - Region expands to fill available space
+- **RegionFlags::AlignCenter** - Region is center-aligned
+
+## Best Practices
+
+1. **Always set display regions** - Windows need valid display areas to render properly
+2. **Manage active window state** - Keep track of which window has focus
+3. **Clean up removed windows** - Ensure removed windows are properly destroyed
+4. **Use appropriate layout types** - Choose VBox or HBox based on desired arrangement
+5. **Handle window navigation** - Provide keyboard shortcuts for split navigation
+
+## Next Steps
+
+- Learn about [Custom Modes](/advanced/custom-modes) to customize window behavior
+- Add visual feedback with [Text Markers](/advanced/text-markers)
+- Configure window settings in [Configuration](/advanced/configuration)

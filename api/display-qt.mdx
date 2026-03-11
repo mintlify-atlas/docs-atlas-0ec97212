@@ -1,0 +1,193 @@
+---
+title: ZepDisplay_Qt
+description: Qt display backend implementation for Zep
+---
+
+`ZepDisplay_Qt` is the Qt rendering backend for Zep. It implements the `ZepDisplay` interface using Qt's `QPainter` API.
+
+**Header:** `include/zep/qt/zepdisplay_qt.h`
+
+## Classes
+
+### ZepDisplay_Qt
+
+Qt implementation of the display interface.
+
+```cpp
+class ZepDisplay_Qt : public ZepDisplay
+{
+public:
+    ZepDisplay_Qt();
+    ~ZepDisplay_Qt();
+    
+    void SetPainter(QPainter* pPainter);
+    
+    // ZepDisplay interface implementation
+    void DrawChars(ZepFont& font, const NVec2f& pos, const NVec4f& col,
+                   const uint8_t* text_begin, const uint8_t* text_end) const override;
+    void DrawLine(const NVec2f& start, const NVec2f& end,
+                  const NVec4f& color, float width) const override;
+    void DrawRectFilled(const NRectf& rc, const NVec4f& color) const override;
+    void SetClipRect(const NRectf& rc) override;
+    ZepFont& GetFont(ZepTextType type) override;
+};
+```
+
+### ZepFont_Qt
+
+Qt font wrapper using `QFont`.
+
+```cpp
+class ZepFont_Qt : public ZepFont
+{
+public:
+    ZepFont_Qt(ZepDisplay& display, const std::string& filePath, int pixelHeight);
+    
+    void SetPixelHeight(int val) override;
+    NVec2f GetTextSize(const uint8_t* pBegin,
+                       const uint8_t* pEnd = nullptr) const override;
+    QFont& GetQtFont();
+    float Descent() const;
+};
+```
+
+## Implementation Details
+
+### Painter Management (zepdisplay_qt.h:111)
+
+```cpp
+void SetPainter(QPainter* pPainter);
+```
+
+You must call this before any drawing operations to set the active `QPainter` instance. Typically called at the start of your widget's `paintEvent()`.
+
+### Drawing Operations
+
+#### DrawChars (zepdisplay_qt.h:116)
+
+```cpp
+void DrawChars(ZepFont& font, const NVec2f& pos, const NVec4f& col,
+               const uint8_t* text_begin, const uint8_t* text_end) const override;
+```
+
+- Casts font to `ZepFont_Qt` and applies it via `QPainter::setFont()`
+- Sets pen color using `QColor::fromRgbF()`
+- Uses `QPainter::drawText()` with `Qt::TextLongestVariant` flag
+- Adjusts vertical position to account for font descent
+- Text is rendered as UTF-8 using `QString::fromUtf8()`
+
+#### DrawLine (zepdisplay_qt.h:133)
+
+```cpp
+void DrawLine(const NVec2f& start, const NVec2f& end,
+              const NVec4f& color, float width) const override;
+```
+
+- Uses `QPainter::drawLine()` with a `QPen` of specified width and color
+- Color is converted to `QColor` via `QColor::fromRgbF()`
+
+#### DrawRectFilled (zepdisplay_qt.h:141)
+
+```cpp
+void DrawRectFilled(const NRectf& rc, const NVec4f& color) const override;
+```
+
+- Uses `QPainter::fillRect()` with a `QRect` and `QColor`
+- Converts Zep's rect format to Qt's `QRect`
+
+### Clipping (zepdisplay_qt.h:148)
+
+```cpp
+void SetClipRect(const NRectf& rc) override;
+```
+
+- Sets clip rect via `QPainter::setClipRect()` if width > 0
+- Disables clipping with `QPainter::setClipping(false)` when width is 0
+- Stores the current clip rect in `m_clipRect`
+
+### Font Management (zepdisplay_qt.h:162)
+
+```cpp
+ZepFont& GetFont(ZepTextType type) override;
+```
+
+- Creates `ZepFont_Qt` instances on demand
+- Uses application default font height as base
+- Scales font size for heading types:
+  - `Heading1`: 1.75x base height
+  - `Heading2`: 1.5x base height
+  - `Heading3`: 1.25x base height
+
+### Font Configuration (zepdisplay_qt.h:40)
+
+`ZepFont_Qt::SetPixelHeight()` configures the font:
+- Uses `"Menlo"` on macOS, `"Consolas"` on other platforms
+- Sets `QFont::Monospace` style hint
+- Calculates and caches font descent using `QFontMetrics`
+- Invalidates character size cache
+
+### Text Measurement (zepdisplay_qt.h:57)
+
+```cpp
+NVec2f GetTextSize(const uint8_t* pBegin, const uint8_t* pEnd = nullptr) const override;
+```
+
+- Uses `QFontMetrics::size()` with flags:
+  - `Qt::TextIncludeTrailingSpaces`
+  - `Qt::TextLongestVariant`
+- Handles tab characters by multiplying width by 4
+- Falls back to 'A' character size for invalid glyphs
+- Returns width and height as `NVec2f`
+
+## Helper Functions
+
+The header provides conversion utilities:
+
+```cpp
+inline NVec2f toNVec2f(const QPoint& im);
+inline NVec2f toNVec2f(const QPointF& im);
+inline QPoint toQPoint(const NVec2f& im);
+```
+
+## Usage Example
+
+```cpp
+#include "zep/qt/zepdisplay_qt.h"
+#include "zep/editor.h"
+#include <QWidget>
+#include <QPainter>
+
+class ZepWidget : public QWidget {
+public:
+    ZepWidget(QWidget* parent = nullptr)
+        : QWidget(parent),
+          m_display(std::make_shared<ZepDisplay_Qt>()),
+          m_editor(m_display, "/path/to/root") {}
+    
+    void paintEvent(QPaintEvent* event) override {
+        QPainter painter(this);
+        
+        // Set the painter for Zep to use
+        std::static_pointer_cast<ZepDisplay_Qt>(m_display)->SetPainter(&painter);
+        
+        // Update editor size and draw
+        m_editor.SetDisplayRegion(NVec2f(width(), height()));
+        m_editor.Display();
+    }
+    
+private:
+    std::shared_ptr<ZepDisplay_Qt> m_display;
+    ZepEditor m_editor;
+};
+```
+
+## Platform Differences
+
+- **macOS**: Uses Menlo font by default
+- **Other platforms**: Uses Consolas font by default
+- Both fall back to Qt's generic monospace font if the preferred font is unavailable
+
+## Related
+
+- [ZepDisplay](/api/display) - Abstract display interface
+- [ZepDisplay_ImGui](/api/display-imgui) - ImGui implementation

@@ -1,0 +1,235 @@
+---
+title: KeyMap
+description: Key binding system for custom keyboard shortcuts and command mapping
+---
+
+## Overview
+
+The `KeyMap` class provides a flexible key binding system that maps keyboard input sequences to editor commands. It supports complex key sequences, digit capture for counts, register specification, and custom character capture.
+
+## Core Classes
+
+### KeyMap
+
+The main keymap structure that stores command bindings in a tree structure.
+
+```cpp
+struct KeyMap
+{
+    bool ignoreFinalDigit = false;
+    std::shared_ptr<CommandNode> spRoot = std::make_shared<CommandNode>();
+};
+```
+
+**Members:**
+- `ignoreFinalDigit` - Whether to ignore trailing digits in key sequences
+- `spRoot` - Root node of the command tree
+
+### CommandNode
+
+Represents a node in the keymap tree, allowing for hierarchical command structures.
+
+```cpp
+struct CommandNode
+{
+    std::string token;
+    StringId commandId;
+    std::unordered_map<std::string, std::shared_ptr<CommandNode>> children;
+};
+```
+
+**Special Tokens:**
+- `<D>` - Captures digits (for counts)
+- `<R>` - Captures register names
+- `<.>` - Captures any single character
+
+### KeyMapResult
+
+Contains the result of a keymap lookup, including captured values and the matched command.
+
+```cpp
+struct KeyMapResult
+{
+    std::vector<int> captureNumbers;
+    std::vector<char> captureChars;
+    std::vector<char> captureRegisters;
+    std::string commandWithoutGroups;
+    bool needMoreChars = false;
+    StringId foundMapping;
+    std::string searchPath;
+    
+    int TotalCount() const;
+    char RegisterName() const;
+};
+```
+
+**Members:**
+- `captureNumbers` - Numeric counts captured from the key sequence
+- `captureChars` - Individual characters captured
+- `captureRegisters` - Register names captured
+- `needMoreChars` - True if more input is needed to complete the command
+- `foundMapping` - The command ID that was matched
+- `searchPath` - The path taken through the keymap tree
+
+**Methods:**
+- `TotalCount()` - Returns the sum of all captured numbers, or 1 if none
+- `RegisterName()` - Returns the first captured register, or 0 if none
+
+## Functions
+
+### keymap_add
+
+Adds a new key binding to one or more keymaps.
+
+```cpp
+bool keymap_add(const std::vector<KeyMap*>& maps, 
+                const std::vector<std::string>& strCommand, 
+                const StringId& commandId, 
+                KeyMapAdd opt = KeyMapAdd::Replace);
+
+bool keymap_add(KeyMap& map, 
+                const std::string& strCommand, 
+                const StringId& commandId, 
+                KeyMapAdd opt = KeyMapAdd::Replace);
+```
+
+**Parameters:**
+- `maps` / `map` - Target keymap(s) to add the binding to
+- `strCommand` - Key sequence(s) that trigger the command
+- `commandId` - Command identifier to execute
+- `opt` - Whether to replace existing bindings or only add new ones
+
+**Returns:** `true` if the binding was added successfully
+
+**Example:**
+```cpp
+KeyMap myKeymap;
+keymap_add(myKeymap, "dd", id_DeleteLine);
+keymap_add(myKeymap, "<D>j", id_MotionDown);  // Captures digit for count
+keymap_add(myKeymap, "\"<R>yy", id_YankLine);  // Captures register
+```
+
+### keymap_find
+
+Searches for a command binding matching the given key sequence.
+
+```cpp
+void keymap_find(const KeyMap& map, 
+                 const std::string& strCommand, 
+                 KeyMapResult& result);
+```
+
+**Parameters:**
+- `map` - Keymap to search
+- `strCommand` - Key sequence to look up
+- `result` - Output parameter containing the search result
+
+**Example:**
+```cpp
+KeyMapResult result;
+keymap_find(myKeymap, "5dd", result);
+if (!result.needMoreChars && result.foundMapping.IsValid())
+{
+    int count = result.TotalCount();  // 5
+    // Execute the DeleteLine command 5 times
+}
+```
+
+### keymap_dump
+
+Outputs the entire keymap structure for debugging.
+
+```cpp
+void keymap_dump(const KeyMap& map, std::ostringstream& str);
+```
+
+**Parameters:**
+- `map` - Keymap to dump
+- `str` - Output stream to write to
+
+## KeyMapAdd Enum
+
+Controls how new bindings interact with existing ones.
+
+```cpp
+enum class KeyMapAdd
+{
+    New,      // Only add if the binding doesn't exist
+    Replace   // Replace existing binding if present
+};
+```
+
+## Built-in Command IDs
+
+Zep provides numerous pre-defined command IDs for common operations:
+
+### Mode Commands
+- `id_NormalMode`, `id_InsertMode`, `id_VisualMode`, `id_ExMode`
+- `id_VisualLineMode`
+
+### Motion Commands
+- `id_MotionUp`, `id_MotionDown`, `id_MotionLeft`, `id_MotionRight`
+- `id_MotionWord`, `id_MotionBackWord`, `id_MotionEndWord`
+- `id_MotionWORD`, `id_MotionBackWORD`, `id_MotionEndWORD`
+- `id_MotionLineBegin`, `id_MotionLineEnd`, `id_MotionLineFirstChar`
+- `id_MotionPageForward`, `id_MotionPageBackward`
+- `id_MotionGotoLine`, `id_MotionGotoBeginning`
+
+### Edit Commands
+- `id_Delete`, `id_DeleteLine`, `id_DeleteWord`, `id_DeleteToLineEnd`
+- `id_Yank`, `id_YankLine`
+- `id_PasteBefore`, `id_PasteAfter`
+- `id_ChangeLine`, `id_ChangeWord`, `id_ChangeToLineEnd`
+- `id_Substitute`, `id_SubstituteLine`
+- `id_Undo`, `id_Redo`
+
+### Insert Commands
+- `id_InsertCarriageReturn`, `id_InsertTab`, `id_Backspace`
+- `id_Append`, `id_AppendToLine`
+- `id_OpenLineBelow`, `id_OpenLineAbove`
+
+### Search Commands
+- `id_Find`, `id_FindBackwards`, `id_FindNext`
+- `id_QuickSearch`
+
+### Standard Mode Commands
+- `id_StandardCopy`, `id_StandardPaste`, `id_StandardSelectAll`
+- `id_MotionStandardUp`, `id_MotionStandardDown`
+- `id_MotionStandardLeftSelect`, `id_MotionStandardRightSelect`
+
+See `include/zep/keymap.h:20-173` for the complete list.
+
+## Usage Example
+
+```cpp
+// Create a custom keymap
+KeyMap customKeymap;
+
+// Add a simple binding
+keymap_add(customKeymap, "ZZ", id_Save);
+
+// Add a binding with count capture
+keymap_add(customKeymap, "<D>dd", id_DeleteLine);
+
+// Add a binding with register capture
+keymap_add(customKeymap, "\"<R>y", id_Yank);
+
+// Add a binding with character capture
+keymap_add(customKeymap, "f<.>", id_FindNext);
+
+// Look up a key sequence
+KeyMapResult result;
+keymap_find(customKeymap, "3dd", result);
+
+if (!result.needMoreChars && result.foundMapping.IsValid())
+{
+    // result.TotalCount() returns 3
+    // result.foundMapping is id_DeleteLine
+    // Execute the command with the captured count
+}
+```
+
+## See Also
+
+- [ZepMode](/api/mode) - Editor modes that use keymaps
+- [ZepEditor](/api/editor) - Main editor class

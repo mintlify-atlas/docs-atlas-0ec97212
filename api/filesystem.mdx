@@ -1,0 +1,391 @@
+---
+title: File System
+description: File system abstraction for custom file operations and storage backends
+---
+
+## Overview
+
+Zep provides a file system abstraction layer through the `IZepFileSystem` interface, allowing you to customize how the editor reads and writes files. This enables integration with virtual file systems, compressed archives, network storage, or any custom storage backend.
+
+## IZepFileSystem Interface
+
+The core interface that defines Zep's file system operations.
+
+```cpp
+class IZepFileSystem
+{
+public:
+    virtual ~IZepFileSystem() {}
+    
+    // File I/O
+    virtual std::string Read(const fs::path& filePath) = 0;
+    virtual bool Write(const fs::path& filePath, const void* pData, size_t size) = 0;
+    
+    // Path operations
+    virtual fs::path GetConfigPath() const = 0;
+    virtual fs::path GetSearchRoot(const fs::path& start, bool& foundGit) const = 0;
+    virtual const fs::path& GetWorkingDirectory() const = 0;
+    virtual void SetWorkingDirectory(const fs::path& path) = 0;
+    
+    // Directory operations
+    virtual bool MakeDirectories(const fs::path& path) = 0;
+    virtual bool IsDirectory(const fs::path& path) const = 0;
+    virtual void ScanDirectory(const fs::path& path, 
+        std::function<bool(const fs::path& path, bool& dont_recurse)> fnScan) const = 0;
+    
+    // File properties
+    virtual bool IsReadOnly(const fs::path& path) const = 0;
+    virtual bool Exists(const fs::path& path) const = 0;
+    virtual bool Equivalent(const fs::path& path1, const fs::path& path2) const = 0;
+    virtual fs::path Canonical(const fs::path& path) const = 0;
+    
+    // Configuration
+    virtual void SetFlags(uint32_t flags) = 0;
+};
+```
+
+## Methods
+
+### File I/O
+
+#### Read
+
+Reads the entire contents of a file as a string.
+
+```cpp
+virtual std::string Read(const fs::path& filePath) = 0;
+```
+
+**Parameters:**
+- `filePath` - Path to the file to read
+
+**Returns:** File contents as a string
+
+**Example:**
+```cpp
+std::string content = fileSystem->Read("path/to/file.txt");
+```
+
+#### Write
+
+Writes data to a file.
+
+```cpp
+virtual bool Write(const fs::path& filePath, const void* pData, size_t size) = 0;
+```
+
+**Parameters:**
+- `filePath` - Path to the file to write
+- `pData` - Pointer to the data buffer
+- `size` - Size of the data in bytes
+
+**Returns:** `true` if the write was successful
+
+**Example:**
+```cpp
+std::string content = "Hello, World!";
+fileSystem->Write("output.txt", content.data(), content.size());
+```
+
+### Path Operations
+
+#### GetConfigPath
+
+Returns the application configuration directory where config files and the executable reside.
+
+```cpp
+virtual fs::path GetConfigPath() const = 0;
+```
+
+**Returns:** Path to the config directory
+
+#### GetSearchRoot
+
+Finds the root directory for searches, optionally looking for a Git repository root.
+
+```cpp
+virtual fs::path GetSearchRoot(const fs::path& start, bool& foundGit) const = 0;
+```
+
+**Parameters:**
+- `start` - Starting path for the search
+- `foundGit` - Output parameter set to `true` if a Git root was found
+
+**Returns:** The search root path (either Git root or current working directory)
+
+#### GetWorkingDirectory
+
+Gets the current working directory, typically the root of the project being edited.
+
+```cpp
+virtual const fs::path& GetWorkingDirectory() const = 0;
+```
+
+**Returns:** Current working directory path
+
+#### SetWorkingDirectory
+
+Sets the current working directory.
+
+```cpp
+virtual void SetWorkingDirectory(const fs::path& path) = 0;
+```
+
+**Parameters:**
+- `path` - New working directory path
+
+### Directory Operations
+
+#### MakeDirectories
+
+Creates a directory and all necessary parent directories.
+
+```cpp
+virtual bool MakeDirectories(const fs::path& path) = 0;
+```
+
+**Parameters:**
+- `path` - Directory path to create
+
+**Returns:** `true` if successful
+
+#### IsDirectory
+
+Checks if a path points to a directory.
+
+```cpp
+virtual bool IsDirectory(const fs::path& path) const = 0;
+```
+
+**Parameters:**
+- `path` - Path to check
+
+**Returns:** `true` if the path is a directory
+
+#### ScanDirectory
+
+Recursively scans a directory, calling a callback for each file and subdirectory.
+
+```cpp
+virtual void ScanDirectory(const fs::path& path, 
+    std::function<bool(const fs::path& path, bool& dont_recurse)> fnScan) const = 0;
+```
+
+**Parameters:**
+- `path` - Directory to scan
+- `fnScan` - Callback function called for each entry
+  - Returns `true` to continue scanning, `false` to stop
+  - Set `dont_recurse` to `true` to skip subdirectories
+
+**Example:**
+```cpp
+fileSystem->ScanDirectory("src", [](const fs::path& path, bool& dont_recurse) {
+    if (path.extension() == ".cpp")
+    {
+        std::cout << "Found: " << path << std::endl;
+    }
+    if (path.filename() == "node_modules")
+    {
+        dont_recurse = true;  // Skip this directory
+    }
+    return true;  // Continue scanning
+});
+```
+
+### File Properties
+
+#### IsReadOnly
+
+Checks if a file is read-only.
+
+```cpp
+virtual bool IsReadOnly(const fs::path& path) const = 0;
+```
+
+**Parameters:**
+- `path` - File path to check
+
+**Returns:** `true` if the file is read-only
+
+#### Exists
+
+Checks if a file or directory exists.
+
+```cpp
+virtual bool Exists(const fs::path& path) const = 0;
+```
+
+**Parameters:**
+- `path` - Path to check
+
+**Returns:** `true` if the path exists
+
+#### Equivalent
+
+Checks if two paths refer to the same file or directory.
+
+```cpp
+virtual bool Equivalent(const fs::path& path1, const fs::path& path2) const = 0;
+```
+
+**Parameters:**
+- `path1`, `path2` - Paths to compare
+
+**Returns:** `true` if the paths refer to the same file
+
+#### Canonical
+
+Returns the canonical (absolute, normalized) form of a path.
+
+```cpp
+virtual fs::path Canonical(const fs::path& path) const = 0;
+```
+
+**Parameters:**
+- `path` - Path to normalize
+
+**Returns:** Canonical path
+
+### Configuration
+
+#### SetFlags
+
+Sets file system behavior flags.
+
+```cpp
+virtual void SetFlags(uint32_t flags) = 0;
+```
+
+**Parameters:**
+- `flags` - Bitwise OR of `ZepFileSystemFlags` values
+
+## ZepFileSystemCPP
+
+The default file system implementation using C++ standard library (`std::filesystem`).
+
+```cpp
+class ZepFileSystemCPP : public IZepFileSystem
+{
+public:
+    ZepFileSystemCPP(const fs::path& configPath);
+    ~ZepFileSystemCPP();
+    
+    // Implements all IZepFileSystem methods
+};
+```
+
+**Constructor:**
+```cpp
+ZepFileSystemCPP(const fs::path& configPath);
+```
+
+**Parameters:**
+- `configPath` - Path to the application configuration directory
+
+**Example:**
+```cpp
+auto fileSystem = std::make_shared<ZepFileSystemCPP>("/etc/myapp");
+```
+
+## ZepFileSystemFlags
+
+Flags that control file system behavior.
+
+```cpp
+enum ZepFileSystemFlags
+{
+    SearchGitRoot = (1 << 0)  // Search for Git repository root
+};
+```
+
+**Values:**
+- `SearchGitRoot` - When set, `GetSearchRoot` will look for a `.git` directory
+
+**Example:**
+```cpp
+fileSystem->SetFlags(ZepFileSystemFlags::SearchGitRoot);
+```
+
+## Implementing a Custom File System
+
+To create a custom file system, inherit from `IZepFileSystem` and implement all virtual methods:
+
+```cpp
+class MyCustomFileSystem : public IZepFileSystem
+{
+public:
+    virtual std::string Read(const fs::path& filePath) override
+    {
+        // Read from your custom storage
+        return myStorage.LoadFile(filePath.string());
+    }
+    
+    virtual bool Write(const fs::path& filePath, 
+                      const void* pData, 
+                      size_t size) override
+    {
+        // Write to your custom storage
+        return myStorage.SaveFile(filePath.string(), pData, size);
+    }
+    
+    // Implement remaining methods...
+    
+private:
+    MyStorageBackend myStorage;
+};
+
+// Use the custom file system
+auto customFS = std::make_shared<MyCustomFileSystem>();
+ZepEditor editor(display, customFS);
+```
+
+## Common Use Cases
+
+### Virtual File System
+```cpp
+class VirtualFileSystem : public IZepFileSystem
+{
+    std::map<std::string, std::string> m_files;
+    
+public:
+    std::string Read(const fs::path& filePath) override
+    {
+        return m_files[filePath.string()];
+    }
+    
+    bool Write(const fs::path& filePath, 
+              const void* pData, 
+              size_t size) override
+    {
+        m_files[filePath.string()] = std::string(
+            static_cast<const char*>(pData), size);
+        return true;
+    }
+};
+```
+
+### Network File System
+```cpp
+class NetworkFileSystem : public IZepFileSystem
+{
+    HTTPClient m_client;
+    
+public:
+    std::string Read(const fs::path& filePath) override
+    {
+        return m_client.Get("/files/" + filePath.string());
+    }
+    
+    bool Write(const fs::path& filePath, 
+              const void* pData, 
+              size_t size) override
+    {
+        return m_client.Put("/files/" + filePath.string(), pData, size);
+    }
+};
+```
+
+## See Also
+
+- [ZepEditor](/api/editor) - Main editor class that uses the file system
+- [ZepBuffer](/api/buffer) - Text buffer that loads/saves through the file system
