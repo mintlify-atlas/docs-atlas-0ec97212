@@ -1,0 +1,157 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Zep",
+  "projectDescription": "An embeddable text editor with optional Vim mode and rendering-agnostic design",
+  "theme": "aspen",
+  "primaryColor": "#94cb04",
+  "lightColor": "#545454",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/buffers",
+              "concepts/modes",
+              "concepts/display-layer",
+              "concepts/syntax-highlighting"
+            ]
+          },
+          {
+            "group": "Integration",
+            "pages": [
+              "integration/overview",
+              "integration/single-header",
+              "integration/cmake-library",
+              "integration/imgui",
+              "integration/qt"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/vim-mode",
+              "guides/standard-mode",
+              "guides/keymapping",
+              "guides/theming",
+              "guides/repl-integration",
+              "guides/syntax-extensions"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/custom-modes",
+              "advanced/text-markers",
+              "advanced/window-management",
+              "advanced/configuration"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Classes",
+            "pages": [
+              "api/editor",
+              "api/buffer",
+              "api/window",
+              "api/tab-window"
+            ]
+          },
+          {
+            "group": "Modes",
+            "pages": [
+              "api/mode",
+              "api/mode-vim",
+              "api/mode-standard",
+              "api/mode-repl",
+              "api/mode-search"
+            ]
+          },
+          {
+            "group": "Display & Rendering",
+            "pages": [
+              "api/display",
+              "api/display-imgui",
+              "api/display-qt"
+            ]
+          },
+          {
+            "group": "Text Processing",
+            "pages": [
+              "api/gap-buffer",
+              "api/glyph-iterator",
+              "api/commands"
+            ]
+          },
+          {
+            "group": "Syntax & Theming",
+            "pages": [
+              "api/syntax",
+              "api/theme",
+              "api/range-markers"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/keymap",
+              "api/filesystem",
+              "api/scroller"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Modal Vim editing with extensive keybindings",
+    "Standard notepad-style editing mode",
+    "Rendering agnostic design (ImGui, Qt, extensible)",
+    "Gap buffer text storage with UTF-8 support",
+    "Pluggable syntax highlighting engine",
+    "Split windows and tab management",
+    "REPL mode for scripting integration",
+    "Fuzzy file search (Ctrl+P)",
+    "Theme support with multiple color schemes",
+    "Text markers for errors and highlights",
+    "Single-header or CMake library integration",
+    "Minimal dependencies (C++14+)"
+  ],
+  "publicApiSurface": [
+    "ZepEditor",
+    "ZepBuffer",
+    "ZepWindow",
+    "ZepTabWindow",
+    "ZepMode",
+    "ZepMode_Vim",
+    "ZepMode_Standard",
+    "ZepMode_Repl",
+    "ZepDisplay",
+    "ZepDisplay_ImGui",
+    "ZepDisplay_Qt",
+    "ZepSyntax",
+    "ZepTheme",
+    "GapBuffer",
+    "GlyphIterator",
+    "ZepCommand",
+    "KeyMap",
+    "RangeMarker",
+    "IZepFileSystem"
+  ]
+}
